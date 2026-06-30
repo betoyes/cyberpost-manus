@@ -1,5 +1,9 @@
 import { describe, it, expect } from "vitest";
-import { toSaoPauloInput, parseSaoPauloInput, formatSaoPaulo } from "../shared/timezone";
+import {
+  toSaoPauloInput,
+  parseSaoPauloInput,
+  formatSaoPaulo,
+} from "../shared/timezone";
 
 // 2024-03-01T11:00:00Z = 2024-03-01T08:00 SP (UTC-3)
 const UTC_MS = new Date("2024-03-01T11:00:00Z").getTime();
