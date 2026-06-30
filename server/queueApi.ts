@@ -93,14 +93,23 @@ export async function queueNextHandler(req: Request, res: Response) {
     }
 
     // Resolve the account: use post.accountId, fall back to the default account.
-    let account: { id: number; name: string; handle: string | null; igUserId: string | null } | null = null;
-    if (post.accountId) {
-      const acc = await db.getAccount(post.accountId);
-      if (acc) account = { id: acc.id, name: acc.name, handle: acc.handle ?? null, igUserId: acc.igUserId ?? null };
-    }
-    if (!account) {
-      const def = await db.getDefaultAccount();
-      if (def) account = { id: def.id, name: def.name, handle: def.handle ?? null, igUserId: def.igUserId ?? null };
+    // Wrapped in try/catch so the queue keeps working if the accounts table
+    // hasn't been migrated yet in production.
+    type AccountInfo = { id: number; name: string; handle: string | null; igUserId: string | null };
+    let account: AccountInfo | null = null;
+    try {
+      if (post.accountId) {
+        const acc = await db.getAccount(post.accountId);
+        if (acc)
+          account = { id: acc.id, name: acc.name, handle: acc.handle ?? null, igUserId: acc.igUserId ?? null };
+      }
+      if (!account) {
+        const def = await db.getDefaultAccount();
+        if (def)
+          account = { id: def.id, name: def.name, handle: def.handle ?? null, igUserId: def.igUserId ?? null };
+      }
+    } catch {
+      // accounts table not yet migrated — continue without account info
     }
 
     return res.json({
