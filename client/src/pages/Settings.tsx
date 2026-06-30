@@ -112,8 +112,8 @@ export default function Settings() {
           </CardHeader>
           <CardContent className="space-y-3 text-sm">
             <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5">
-              <span>Cron de verificação</span>
-              <span className="font-mono text-muted-foreground">a cada 30 minutos</span>
+              <span>Checagem de rotina</span>
+              <span className="font-mono text-muted-foreground">diariamente às 08h (Brasília)</span>
             </div>
             <div className="flex items-center justify-between rounded-lg border bg-muted/30 px-3 py-2.5">
               <span>Alerta de imagem ausente</span>

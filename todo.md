@@ -44,3 +44,11 @@
 - O app web é o cérebro; o agendamento do Manus (Ter/Qui 8h e 17h) executa Drive/Instagram/Gmail via conectores.
 - O cron de 30min roda no servidor do app (gratuito); só "escala" ao Manus quando há publicação real na janela agendada.
 - Integrações diretas (Google/Meta API) foram descartadas a pedido do usuário para evitar App Review/verificação.
+## Pós-deploy (URL: https://cyberpost.manus.space)
+- [x] Verificar endpoints técnicos acessíveis por token sem login na produção (401/403 corretos)
+- [x] Regra confirmada (Opção A): manual posta direto; IA só após aprovação por e-mail (já implementado/testado)
+- [x] Cron reduzido para 1x/dia (08h Brasília / 11:00 UTC) — não consome créditos Manus
+- [x] Cron server-side (Heartbeat) registrado: cyberseccast-brain-daily (task_uid AqUEqMKax9BNyrv8xQgmFN)
+- [x] instagram_automation.py reescrito: consome /api/queue/next e reporta via /api/queue/report
+- [x] Agendamento Manus (Ter/Qui 8h/17h) atualizado para usar a fila do app (Opção 1: app = fonte única)
+- [ ] Manual de uso final + guia da arquitetura (em elaboração)

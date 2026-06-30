@@ -76,8 +76,8 @@ export default function Home() {
           </h1>
           <p className="mt-2 max-w-xl text-sm text-muted-foreground">
             Gerencie o calendário, acompanhe o status de cada publicação e mantenha o fluxo de
-            postagens no Instagram sob controle — com aprovação por e-mail e checagem automática a
-            cada 30 minutos.
+            postagens no Instagram sob controle — com aprovação por e-mail e checagem automática
+            diária.
           </p>
           <div className="mt-6 flex flex-wrap gap-3">
             <Button onClick={() => navigate("/calendar")}>
@@ -166,7 +166,7 @@ export default function Home() {
               <HealthRow label="Google (Drive/Sheets/Gmail)" ok={flags?.googleConnected} />
               <HealthRow label="Instagram (Meta Graph)" ok={flags?.metaConnected} />
               <HealthRow label="Planilha configurada" ok={flags?.sheetConfigured} />
-              <HealthRow label="Cron (30 min) ativo" ok={flags?.cronEnabled} />
+              <HealthRow label="Checagem diária ativa" ok={flags?.cronEnabled} />
               <Button
                 variant="outline"
                 className="mt-2 w-full bg-card"
