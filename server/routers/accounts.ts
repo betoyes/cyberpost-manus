@@ -8,16 +8,19 @@ export const accountsRouter = router({
   create: adminProcedure
     .input(
       z.object({
-        label: z.string().min(1),
+        name: z.string().min(1),
+        handle: z.string().optional(),
         igUserId: z.string().optional(),
-        igUsername: z.string().optional(),
+        isDefault: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
       const id = await db.createAccount({
-        label: input.label,
+        name: input.name,
+        handle: input.handle ?? null,
         igUserId: input.igUserId ?? null,
-        igUsername: input.igUsername ?? null,
+        platform: "instagram",
+        isDefault: input.isDefault ?? false,
         active: true,
       });
       return { id };
@@ -27,15 +30,22 @@ export const accountsRouter = router({
     .input(
       z.object({
         id: z.number(),
-        label: z.string().min(1).optional(),
+        name: z.string().min(1).optional(),
+        handle: z.string().nullable().optional(),
         igUserId: z.string().nullable().optional(),
-        igUsername: z.string().nullable().optional(),
         active: z.boolean().optional(),
       })
     )
     .mutation(async ({ input }) => {
       const { id, ...rest } = input;
       await db.updateAccount(id, rest);
+      return { ok: true };
+    }),
+
+  setDefault: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.setDefaultAccount(input.id);
       return { ok: true };
     }),
 

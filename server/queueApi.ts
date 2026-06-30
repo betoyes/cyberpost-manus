@@ -25,7 +25,8 @@ function checkToken(req: Request): boolean {
   // constant-time-ish compare
   if (token.length !== expected.length) return false;
   let diff = 0;
-  for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
+  for (let i = 0; i < token.length; i++)
+    diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
   return diff === 0;
 }
 
@@ -46,14 +47,24 @@ export async function queueGenerateCaptionHandler(req: Request, res: Response) {
       return res.status(401).json({ error: "unauthorized" });
     }
     const { postId } = (req.body ?? {}) as { postId?: number };
-    if (typeof postId !== "number") return res.status(400).json({ error: "postId required" });
+    if (typeof postId !== "number")
+      return res.status(400).json({ error: "postId required" });
     const post = await db.getPost(postId);
     if (!post) return res.status(404).json({ error: "post-not-found" });
     const theme = (post.theme ?? "").trim();
-    if (theme.length === 0) return res.status(400).json({ error: "post has no theme" });
+    if (theme.length === 0)
+      return res.status(400).json({ error: "post has no theme" });
     const caption = await generateCaption(theme);
-    await db.updatePost(postId, { captionAi: caption, status: "Aguardando Aprovação", captionApproved: false });
-    await db.addLog({ postId, kind: "ia", message: "Legenda gerada por IA. Aguardando aprovação por e-mail." });
+    await db.updatePost(postId, {
+      captionAi: caption,
+      status: "Aguardando Aprovação",
+      captionApproved: false,
+    });
+    await db.addLog({
+      postId,
+      kind: "ia",
+      message: "Legenda gerada por IA. Aguardando aprovação por e-mail.",
+    });
     return res.json({ ok: true, caption });
   } catch (error) {
     const err = error as Error;
@@ -64,7 +75,8 @@ export async function queueGenerateCaptionHandler(req: Request, res: Response) {
 /** GET /api/queue/next */
 export async function queueNextHandler(req: Request, res: Response) {
   try {
-    if (!checkToken(req)) return res.status(401).json({ error: "unauthorized" });
+    if (!checkToken(req))
+      return res.status(401).json({ error: "unauthorized" });
 
     const now = Date.now();
     const post = await db.getNextReadyToExecute(now);
@@ -74,7 +86,21 @@ export async function queueNextHandler(req: Request, res: Response) {
     // hand it to the executor (the cron will have already set it to halted/awaiting).
     const cap = resolveCaption(post);
     if (cap.kind === "halt") {
-      return res.json({ order: null, blocked: { postId: post.id, reason: cap.reason } });
+      return res.json({
+        order: null,
+        blocked: { postId: post.id, reason: cap.reason },
+      });
+    }
+
+    // Resolve the account: use post.accountId, fall back to the default account.
+    let account: { id: number; name: string; handle: string | null; igUserId: string | null } | null = null;
+    if (post.accountId) {
+      const acc = await db.getAccount(post.accountId);
+      if (acc) account = { id: acc.id, name: acc.name, handle: acc.handle ?? null, igUserId: acc.igUserId ?? null };
+    }
+    if (!account) {
+      const def = await db.getDefaultAccount();
+      if (def) account = { id: def.id, name: def.name, handle: def.handle ?? null, igUserId: def.igUserId ?? null };
     }
 
     return res.json({
@@ -86,6 +112,7 @@ export async function queueNextHandler(req: Request, res: Response) {
         captionKind: cap.kind,
         driveFolder: "CybersecCAST",
         accountId: post.accountId ?? null,
+        account,
       },
     });
   } catch (error) {
@@ -104,7 +131,8 @@ export async function queueNextHandler(req: Request, res: Response) {
  */
 export async function queueApprovalHandler(req: Request, res: Response) {
   try {
-    if (!checkToken(req)) return res.status(401).json({ error: "unauthorized" });
+    if (!checkToken(req))
+      return res.status(401).json({ error: "unauthorized" });
 
     const { postId, reply, imageUrl, imageStorageKey } = (req.body ?? {}) as {
       postId?: number;
@@ -137,7 +165,11 @@ export async function queueApprovalHandler(req: Request, res: Response) {
         imageStorageKey: imageStorageKey ?? post.imageStorageKey ?? null,
         note: null,
       });
-      await db.addLog({ postId, kind: "approval", message: `Legenda APROVADA por e-mail para "${post.filename}".` });
+      await db.addLog({
+        postId,
+        kind: "approval",
+        message: `Legenda APROVADA por e-mail para "${post.filename}".`,
+      });
       await notifyOwner({
         title: "CybersecCAST: legenda aprovada",
         content: `Você aprovou a legenda de "${post.filename}". Será publicada na próxima janela de execução.`,
@@ -146,8 +178,16 @@ export async function queueApprovalHandler(req: Request, res: Response) {
     }
 
     // decision === "reject"
-    await db.updatePost(postId, { status: "Fluxo Parado", captionApproved: false, note: "Legenda reprovada por e-mail." });
-    await db.addLog({ postId, kind: "approval", message: `Legenda REPROVADA por e-mail para "${post.filename}". Fluxo parado.` });
+    await db.updatePost(postId, {
+      status: "Fluxo Parado",
+      captionApproved: false,
+      note: "Legenda reprovada por e-mail.",
+    });
+    await db.addLog({
+      postId,
+      kind: "approval",
+      message: `Legenda REPROVADA por e-mail para "${post.filename}". Fluxo parado.`,
+    });
     await notifyOwner({
       title: "CybersecCAST: legenda reprovada",
       content: `Você reprovou a legenda de "${post.filename}". O fluxo foi parado; edite a legenda manual ou ajuste o tema para gerar uma nova.`,
@@ -162,18 +202,26 @@ export async function queueApprovalHandler(req: Request, res: Response) {
 /** POST /api/queue/report */
 export async function queueReportHandler(req: Request, res: Response) {
   try {
-    if (!checkToken(req)) return res.status(401).json({ error: "unauthorized" });
+    if (!checkToken(req))
+      return res.status(401).json({ error: "unauthorized" });
 
-    const { postId, result, permalink, instagramId, imageUrl, imageStorageKey, message } =
-      (req.body ?? {}) as {
-        postId?: number;
-        result?: "posted" | "missing-image" | "error";
-        permalink?: string;
-        instagramId?: string;
-        imageUrl?: string;
-        imageStorageKey?: string;
-        message?: string;
-      };
+    const {
+      postId,
+      result,
+      permalink,
+      instagramId,
+      imageUrl,
+      imageStorageKey,
+      message,
+    } = (req.body ?? {}) as {
+      postId?: number;
+      result?: "posted" | "missing-image" | "error";
+      permalink?: string;
+      instagramId?: string;
+      imageUrl?: string;
+      imageStorageKey?: string;
+      message?: string;
+    };
 
     if (typeof postId !== "number" || !result) {
       return res.status(400).json({ error: "postId and result are required" });
@@ -218,8 +266,15 @@ export async function queueReportHandler(req: Request, res: Response) {
     }
 
     // result === "error"
-    await db.updatePost(postId, { status: "Fluxo Parado", note: message ?? "Erro na execução." });
-    await db.addLog({ postId, kind: "error", message: `Erro na execução: ${message ?? "desconhecido"}` });
+    await db.updatePost(postId, {
+      status: "Fluxo Parado",
+      note: message ?? "Erro na execução.",
+    });
+    await db.addLog({
+      postId,
+      kind: "error",
+      message: `Erro na execução: ${message ?? "desconhecido"}`,
+    });
     await notifyOwner({
       title: "CybersecCAST: erro na publicação",
       content: `Falha ao publicar "${post.filename}". Detalhe: ${message ?? "desconhecido"}`,

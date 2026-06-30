@@ -117,9 +117,11 @@ export default function Calendar() {
   const postNowMut = trpc.posts.postNow.useMutation({
     onSuccess: () => {
       utils.posts.list.invalidate();
-      toast.success("Post priorizado — será publicado na próxima execução do robô");
+      toast.success(
+        "Post priorizado — será publicado na próxima execução do robô"
+      );
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
 
   const list = posts.data ?? [];
@@ -281,7 +283,8 @@ export default function Calendar() {
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {p.accountId
-                          ? (accounts.find(a => a.id === p.accountId)?.label ?? `#${p.accountId}`)
+                          ? (accounts.find(a => a.id === p.accountId)?.name ??
+                            `#${p.accountId}`)
                           : "—"}
                       </TableCell>
                       <TableCell>
@@ -416,9 +419,14 @@ export default function Calendar() {
               <div className="space-y-1.5">
                 <Label>Conta do Instagram</Label>
                 <Select
-                  value={form.accountId != null ? String(form.accountId) : "default"}
+                  value={
+                    form.accountId != null ? String(form.accountId) : "default"
+                  }
                   onValueChange={v =>
-                    setForm({ ...form, accountId: v === "default" ? null : Number(v) })
+                    setForm({
+                      ...form,
+                      accountId: v === "default" ? null : Number(v),
+                    })
                   }
                 >
                   <SelectTrigger>
@@ -428,7 +436,9 @@ export default function Calendar() {
                     <SelectItem value="default">Conta padrão</SelectItem>
                     {accounts.map(a => (
                       <SelectItem key={a.id} value={String(a.id)}>
-                        {a.label}{a.igUsername ? ` (@${a.igUsername})` : ""}
+                        {a.name}
+                        {a.handle ? ` (@${a.handle})` : ""}
+                        {a.isDefault ? " ★" : ""}
                       </SelectItem>
                     ))}
                   </SelectContent>

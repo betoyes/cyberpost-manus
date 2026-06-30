@@ -89,7 +89,11 @@ export async function upsertUser(user: InsertUser): Promise<void> {
 export async function getUserByOpenId(openId: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const result = await db.select().from(users).where(eq(users.openId, openId)).limit(1);
+  const result = await db
+    .select()
+    .from(users)
+    .where(eq(users.openId, openId))
+    .limit(1);
   return result.length > 0 ? result[0] : undefined;
 }
 
@@ -100,7 +104,10 @@ export async function getUserByOpenId(openId: string) {
 export async function listPosts() {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(posts).orderBy(asc(posts.scheduledAt), desc(posts.createdAt));
+  return db
+    .select()
+    .from(posts)
+    .orderBy(asc(posts.scheduledAt), desc(posts.createdAt));
 }
 
 export async function getPost(id: number) {
@@ -113,7 +120,11 @@ export async function getPost(id: number) {
 export async function getPostByApprovalToken(token: string) {
   const db = await getDb();
   if (!db) return undefined;
-  const rows = await db.select().from(posts).where(eq(posts.approvalToken, token)).limit(1);
+  const rows = await db
+    .select()
+    .from(posts)
+    .where(eq(posts.approvalToken, token))
+    .limit(1);
   return rows[0];
 }
 
@@ -151,7 +162,10 @@ export async function getOldestDuePost(nowMs: number) {
     .orderBy(asc(posts.scheduledAt));
   // filter in JS for status set, keep oldest due that is actionable
   const actionable = rows.filter(
-    (r) => r.status === "Pendente" || r.status === "Erro: Imagem Ausente" || r.status === "Aguardando Aprovação",
+    r =>
+      r.status === "Pendente" ||
+      r.status === "Erro: Imagem Ausente" ||
+      r.status === "Aguardando Aprovação"
   );
   return actionable[0];
 }
@@ -171,7 +185,7 @@ export async function getNextReadyToExecute(nowMs: number) {
     .where(lte(posts.scheduledAt, nowMs))
     .orderBy(asc(posts.scheduledAt));
   const actionable = rows.filter(
-    (r) => r.status === "Pendente" || r.status === "Erro: Imagem Ausente",
+    r => r.status === "Pendente" || r.status === "Erro: Imagem Ausente"
   );
   return actionable[0];
 }
@@ -189,7 +203,22 @@ export async function listAccounts() {
 export async function getAccount(id: number) {
   const db = await getDb();
   if (!db) return undefined;
-  const rows = await db.select().from(accounts).where(eq(accounts.id, id)).limit(1);
+  const rows = await db
+    .select()
+    .from(accounts)
+    .where(eq(accounts.id, id))
+    .limit(1);
+  return rows[0];
+}
+
+export async function getDefaultAccount() {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(accounts)
+    .where(eq(accounts.isDefault, true))
+    .limit(1);
   return rows[0];
 }
 
@@ -212,6 +241,13 @@ export async function deleteAccount(id: number) {
   await db.delete(accounts).where(eq(accounts.id, id));
 }
 
+export async function setDefaultAccount(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(accounts).set({ isDefault: false });
+  await db.update(accounts).set({ isDefault: true }).where(eq(accounts.id, id));
+}
+
 /* ------------------------------------------------------------------ */
 /* Settings (key/value)                                               */
 /* ------------------------------------------------------------------ */
@@ -219,7 +255,11 @@ export async function deleteAccount(id: number) {
 export async function getSetting(key: string): Promise<string | null> {
   const db = await getDb();
   if (!db) return null;
-  const rows = await db.select().from(settings).where(eq(settings.settingKey, key)).limit(1);
+  const rows = await db
+    .select()
+    .from(settings)
+    .where(eq(settings.settingKey, key))
+    .limit(1);
   return rows[0]?.settingValue ?? null;
 }
 
@@ -254,5 +294,9 @@ export async function addLog(entry: InsertActivityLog) {
 export async function listLogs(limit = 100) {
   const db = await getDb();
   if (!db) return [];
-  return db.select().from(activityLogs).orderBy(desc(activityLogs.createdAt)).limit(limit);
+  return db
+    .select()
+    .from(activityLogs)
+    .orderBy(desc(activityLogs.createdAt))
+    .limit(limit);
 }

@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/sidebar";
 import { getLoginUrl } from "@/const";
 import { useIsMobile } from "@/hooks/useMobile";
-import { LayoutDashboard, LogOut, PanelLeft, CalendarRange, Plug, ScrollText, Settings as SettingsIcon, ShieldCheck } from "lucide-react";
+import { LayoutDashboard, LogOut, PanelLeft, CalendarRange, Plug, ScrollText, Settings as SettingsIcon, ShieldCheck, Instagram } from "lucide-react";
 import { CSSProperties, useEffect, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { DashboardLayoutSkeleton } from './DashboardLayoutSkeleton';
@@ -30,6 +30,7 @@ import { Button } from "./ui/button";
 const menuItems = [
   { icon: LayoutDashboard, label: "Visão Geral", path: "/" },
   { icon: CalendarRange, label: "Calendário Editorial", path: "/calendar" },
+  { icon: Instagram, label: "Contas Instagram", path: "/accounts" },
   { icon: Plug, label: "Integrações", path: "/integrations" },
   { icon: ScrollText, label: "Logs de Atividade", path: "/logs" },
   { icon: SettingsIcon, label: "Configurações", path: "/settings" },

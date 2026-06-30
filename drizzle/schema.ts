@@ -1,15 +1,27 @@
-import { bigint, int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
+import {
+  bigint,
+  int,
+  mysqlEnum,
+  mysqlTable,
+  text,
+  timestamp,
+  varchar,
+  boolean,
+} from "drizzle-orm/mysql-core";
 
 /**
  * Instagram accounts configured by the operator (Manus connects each one).
  */
 export const accounts = mysqlTable("accounts", {
   id: int("id").autoincrement().primaryKey(),
-  label: varchar("label", { length: 128 }).notNull(),
-  igUserId: varchar("igUserId", { length: 64 }),
-  igUsername: varchar("igUsername", { length: 64 }),
+  name: varchar("name", { length: 128 }).notNull(),
+  handle: varchar("handle", { length: 128 }),
+  igUserId: varchar("igUserId", { length: 128 }),
+  platform: mysqlEnum("platform", ["instagram"]).default("instagram").notNull(),
+  isDefault: boolean("isDefault").default(false).notNull(),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),
+  updatedAt: timestamp("updatedAt").defaultNow().onUpdateNow().notNull(),
 });
 
 export type Account = typeof accounts.$inferSelect;
@@ -45,7 +57,9 @@ export const posts = mysqlTable("posts", {
   /** Theme / keywords used to generate the AI caption. */
   theme: text("theme"),
   /** Caption modes: 'manual' | 'aprovar' (AI + email approval) | 'auto' (alias, still needs approval per spec). */
-  mode: mysqlEnum("mode", ["manual", "aprovar", "auto"]).default("aprovar").notNull(),
+  mode: mysqlEnum("mode", ["manual", "aprovar", "auto"])
+    .default("aprovar")
+    .notNull(),
   /** Exact status strings required by the spec. */
   status: mysqlEnum("status", [
     "Pendente",
@@ -59,7 +73,9 @@ export const posts = mysqlTable("posts", {
   /** Scheduled publish time, stored as UTC unix ms. */
   scheduledAt: bigint("scheduledAt", { mode: "number" }),
   /** Media type to post. */
-  mediaType: mysqlEnum("mediaType", ["image", "reel"]).default("image").notNull(),
+  mediaType: mysqlEnum("mediaType", ["image", "reel"])
+    .default("image")
+    .notNull(),
 
   /** Manual caption (highest priority). */
   captionManual: text("captionManual"),

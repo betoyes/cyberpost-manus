@@ -153,7 +153,27 @@ def upload_media_to_public(local_file_path):
     return output.strip()
 
 
-def write_instagram_command(post_id, public_media_url, caption, mime_type):
+def resolve_instagram_server(account):
+    """
+    Retorna o nome do servidor MCP do Instagram para a conta dada.
+
+    Roteamento multi-conta:
+      - Se account é None ou não tem igUserId → servidor padrão "instagram".
+      - Se account tem igUserId → usa "instagram" por padrão; quando o Manus
+        configurar conectores adicionais (ex.: "instagram-conta2"), o operador
+        deve mapear o igUserId aqui.
+
+    PENDENTE-MANUS: verificar suporte a múltiplas contas no conector de Instagram,
+    conectar a 2ª conta e ajustar server_map com o nome real do servidor MCP.
+    """
+    if not account or not account.get("igUserId"):
+        return "instagram"
+    # Mapeamento: igUserId -> nome do servidor MCP configurado no Manus
+    server_map = {}  # ex.: {"17841400000000001": "instagram-conta2"}
+    return server_map.get(account["igUserId"], "instagram")
+
+
+def write_instagram_command(post_id, public_media_url, caption, mime_type, account=None):
     """Salva o comando manus-mcp-cli de postagem para o agente executar."""
     media_type = "image" if "image" in (mime_type or "") else "video"
     ig_input = {
@@ -161,8 +181,11 @@ def write_instagram_command(post_id, public_media_url, caption, mime_type):
         "caption": caption,
         "media": [{"media_url": public_media_url, "type": media_type}],
     }
+    server = resolve_instagram_server(account)
+    if account:
+        print(f"[executor] Conta: {account.get('name')} (@{account.get('handle', '?')}) → servidor '{server}'")
     cmd = (
-        "manus-mcp-cli tool call create_instagram --server instagram "
+        f"manus-mcp-cli tool call create_instagram --server {server} "
         f"--input '{json.dumps(ig_input)}'"
     )
     fname = os.path.join(WORKDIR, f"post_cmd_{post_id}.sh")
@@ -205,6 +228,7 @@ def main():
     filename = order["filename"]
     caption = order["caption"]
     media_type_hint = order.get("mediaType", "image")
+    account = order.get("account")  # {id, name, handle, igUserId} ou None
     print(f"[executor] Ordem recebida: postId={post_id}, arquivo='{filename}', tipo='{media_type_hint}'")
 
     # 2. Baixa a arte do Drive.
@@ -235,7 +259,7 @@ def main():
         return
 
     # 4. Comando de postagem (o agente Manus executa o .sh).
-    write_instagram_command(post_id, public_url, caption, mime_type)
+    write_instagram_command(post_id, public_url, caption, mime_type, account=account)
 
     # 5. Comando de callback de sucesso (o agente preenche o permalink após postar).
     #    O agente deve substituir PERMALINK_AQUI pelo link retornado pelo Instagram.

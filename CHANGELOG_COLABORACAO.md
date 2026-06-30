@@ -26,38 +26,40 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
-### [2026-06-30] — Claude Code — Multi-conta Instagram + fix toast
+### [2026-06-30] — Claude Code — Multi-conta Instagram (completo) + fix toast
 
 - **O que mudou:**
-  - Nova tabela `accounts` (id, label, igUserId, igUsername, active, createdAt) para registrar contas do Instagram.
-  - Coluna `accountId` (nullable int) adicionada à tabela `posts`.
-  - `GET /api/queue/next` passa `accountId` na resposta para o executor Manus saber qual conta usar.
-  - Novo tRPC router `accounts` (list/create/update/remove).
-  - `Calendar.tsx`: seletor de conta no form create/edit (visível apenas quando há contas cadastradas) + coluna "Conta" na tabela.
+  - Nova tabela `accounts`: id, name, handle, igUserId, platform (enum instagram), isDefault, active, createdAt, updatedAt.
+  - Coluna `accountId` (nullable int) em `posts` — nulo = usa a conta `isDefault`.
+  - `GET /api/queue/next` retorna objeto `account: {id, name, handle, igUserId}` completo (resolve accountId ou default account).
+  - Novo tRPC router `accounts` (list/create/update/setDefault/remove).
+  - Funções `db.ts`: listAccounts, getAccount, getDefaultAccount, createAccount, updateAccount, setDefaultAccount, deleteAccount.
+  - UI: nova página `/accounts` (Contas Instagram) na sidebar — lista, cria, edita, remove e define conta padrão (★).
+  - `Calendar.tsx`: seletor de conta no form + coluna "Conta" na tabela.
+  - `instagram_automation.py`: `resolve_instagram_server(account)` roteia para o servidor MCP correto por `igUserId`; retrocompatível sem contas.
   - Fix toast: texto "será publicado na próxima execução do robô" (sem "(Ter/Qui)").
-- **Arquivos tocados:**
-  - `drizzle/schema.ts` — tabela `accounts` + coluna `accountId` em `posts`
-  - `server/db.ts` — CRUD de contas (listAccounts, getAccount, createAccount, updateAccount, deleteAccount)
-  - `server/routers/accounts.ts` — novo router tRPC
-  - `server/routers.ts` — registra `accountsRouter`
-  - `server/routers/posts.ts` — `accountId` em create/update
-  - `server/queueApi.ts` — `accountId` em GET /api/queue/next
-  - `client/src/pages/Calendar.tsx` — seletor de conta + coluna na tabela + fix toast
-- **Migração de banco?** Sim — aplicar o SQL abaixo em produção:
+- **Arquivos tocados:** `drizzle/schema.ts`, `drizzle/0002_multi_conta.sql`, `server/db.ts`, `server/routers/accounts.ts`, `server/routers.ts`, `server/routers/posts.ts`, `server/queueApi.ts`, `client/src/pages/Calendar.tsx`, `client/src/pages/Accounts.tsx` (novo), `client/src/App.tsx`, `client/src/components/DashboardLayout.tsx`, `instagram_automation.py`.
+- **Migração de banco?** Sim — arquivo `drizzle/0002_multi_conta.sql` gerado. SQL exato:
   ```sql
-  CREATE TABLE accounts (
-    id INT AUTO_INCREMENT PRIMARY KEY,
-    label VARCHAR(128) NOT NULL,
-    igUserId VARCHAR(64),
-    igUsername VARCHAR(64),
-    active BOOLEAN NOT NULL DEFAULT TRUE,
-    createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  CREATE TABLE `accounts` (
+    `id` int AUTO_INCREMENT NOT NULL,
+    `name` varchar(128) NOT NULL,
+    `handle` varchar(128),
+    `igUserId` varchar(128),
+    `platform` enum('instagram') NOT NULL DEFAULT 'instagram',
+    `isDefault` boolean NOT NULL DEFAULT false,
+    `active` boolean NOT NULL DEFAULT true,
+    `createdAt` timestamp NOT NULL DEFAULT (now()),
+    `updatedAt` timestamp NOT NULL DEFAULT (now()) ON UPDATE CURRENT_TIMESTAMP,
+    CONSTRAINT `accounts_id` PRIMARY KEY(`id`)
   );
-  ALTER TABLE posts ADD COLUMN accountId INT NULL;
+  ALTER TABLE `posts` ADD `accountId` int;
   ```
-- **PENDENTE-MANUS:** (1) Aplicar a migração SQL acima no banco de produção (TiDB/MySQL). (2) Atualizar o executor `instagram_automation.py` para ler o campo `accountId` da fila e usar as credenciais da conta correspondente (ou conta padrão se null). (3) Cadastrar as contas do Instagram pelo painel (Configurações → futura aba de contas, ou via API tRPC diretamente).
+- **PENDENTE-MANUS (1):** Aplicar a migração acima no banco de produção (TiDB/MySQL). Pode rodar o SQL diretamente ou via `DATABASE_URL=... pnpm drizzle-kit migrate`.
+- **PENDENTE-MANUS (2):** Verificar suporte a múltiplas contas no conector de Instagram do Manus; conectar a 2ª conta; atualizar `server_map` em `instagram_automation.py` com `{igUserId: "nome-servidor-mcp"}`.
+- **PENDENTE-MANUS (3):** Após deploy, cadastrar a(s) conta(s) na nova tela "Contas Instagram" no painel (`/accounts`), preencher o igUserId e marcar a conta principal como padrão (★).
 - **Branch / PR:** push direto na main.
-- **Testado?** Vitest — ver resultado abaixo.
+- **Testado?** `./node_modules/.bin/vitest run` — 23/23 testes passando.
 
 ### [2026-06-30] — Claude Code — Preparação para deploy no Railway
 

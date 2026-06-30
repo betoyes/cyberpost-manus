@@ -101,24 +101,38 @@ export const postsRouter = router({
    * Sets scheduledAt = now so getNextReadyToExecute returns it on the next executor poll.
    * Does NOT publish to Instagram — that is the executor's job.
    */
-  postNow: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
-    const post = await db.getPost(input.id);
-    if (!post) throw new TRPCError({ code: "NOT_FOUND", message: "Post não encontrado" });
-    if (post.status === "Postado") {
-      throw new TRPCError({ code: "BAD_REQUEST", message: "Post já foi publicado" });
-    }
-    if (post.status === "Aguardando Aprovação") {
-      throw new TRPCError({
-        code: "BAD_REQUEST",
-        message: "Post aguarda aprovação de legenda por e-mail — não é possível forçar publicação",
+  postNow: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      const post = await db.getPost(input.id);
+      if (!post)
+        throw new TRPCError({
+          code: "NOT_FOUND",
+          message: "Post não encontrado",
+        });
+      if (post.status === "Postado") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message: "Post já foi publicado",
+        });
+      }
+      if (post.status === "Aguardando Aprovação") {
+        throw new TRPCError({
+          code: "BAD_REQUEST",
+          message:
+            "Post aguarda aprovação de legenda por e-mail — não é possível forçar publicação",
+        });
+      }
+      await db.updatePost(input.id, {
+        scheduledAt: Date.now(),
+        status: "Pendente",
+        note: null,
       });
-    }
-    await db.updatePost(input.id, { scheduledAt: Date.now(), status: "Pendente", note: null });
-    await db.addLog({
-      postId: input.id,
-      kind: "priorizado",
-      message: `Post "${post.filename}" priorizado para publicação imediata via painel.`,
-    });
-    return { ok: true };
-  }),
+      await db.addLog({
+        postId: input.id,
+        kind: "priorizado",
+        message: `Post "${post.filename}" priorizado para publicação imediata via painel.`,
+      });
+      return { ok: true };
+    }),
 });
