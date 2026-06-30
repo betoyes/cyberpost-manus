@@ -9,5 +9,7 @@ export const ENV = {
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
   // Shared secret token to authenticate the execution-queue API used by the Manus executor.
   // Getter so tests can set process.env.QUEUE_API_TOKEN after module load.
-  get queueApiToken() { return process.env.QUEUE_API_TOKEN ?? ""; },
+  get queueApiToken() {
+    return process.env.QUEUE_API_TOKEN ?? "";
+  },
 };

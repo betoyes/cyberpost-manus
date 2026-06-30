@@ -16,7 +16,9 @@ const statusEnum = z.enum([
 export const postsRouter = router({
   list: adminProcedure.query(() => db.listPosts()),
 
-  get: adminProcedure.input(z.object({ id: z.number() })).query(({ input }) => db.getPost(input.id)),
+  get: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .query(({ input }) => db.getPost(input.id)),
 
   create: adminProcedure
     .input(
@@ -27,7 +29,7 @@ export const postsRouter = router({
         mediaType: mediaEnum.default("image"),
         scheduledAt: z.number().nullable().optional(),
         captionManual: z.string().optional(),
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       const id = await db.createPost({
@@ -39,7 +41,11 @@ export const postsRouter = router({
         captionManual: input.captionManual ?? null,
         status: "Pendente",
       });
-      await db.addLog({ postId: id, kind: "criado", message: `Post criado: ${input.filename}` });
+      await db.addLog({
+        postId: id,
+        kind: "criado",
+        message: `Post criado: ${input.filename}`,
+      });
       return { id };
     }),
 
@@ -54,26 +60,38 @@ export const postsRouter = router({
         scheduledAt: z.number().nullable().optional(),
         captionManual: z.string().nullable().optional(),
         status: statusEnum.optional(),
-      }),
+      })
     )
     .mutation(async ({ input }) => {
       const { id, ...rest } = input;
       await db.updatePost(id, rest);
-      await db.addLog({ postId: id, kind: "editado", message: `Post atualizado` });
+      await db.addLog({
+        postId: id,
+        kind: "editado",
+        message: `Post atualizado`,
+      });
       return { ok: true };
     }),
 
-  remove: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
-    await db.deletePost(input.id);
-    return { ok: true };
-  }),
+  remove: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.deletePost(input.id);
+      return { ok: true };
+    }),
 
   /** Reset a halted/errored post back to Pendente so the cron retries it. */
-  reactivate: adminProcedure.input(z.object({ id: z.number() })).mutation(async ({ input }) => {
-    await db.updatePost(input.id, { status: "Pendente", note: null });
-    await db.addLog({ postId: input.id, kind: "reativado", message: "Post reativado para Pendente" });
-    return { ok: true };
-  }),
+  reactivate: adminProcedure
+    .input(z.object({ id: z.number() }))
+    .mutation(async ({ input }) => {
+      await db.updatePost(input.id, { status: "Pendente", note: null });
+      await db.addLog({
+        postId: input.id,
+        kind: "reativado",
+        message: "Post reativado para Pendente",
+      });
+      return { ok: true };
+    }),
 
   /**
    * Prioritize a post for immediate publication.

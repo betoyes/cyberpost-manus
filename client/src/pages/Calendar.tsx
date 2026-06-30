@@ -28,11 +28,28 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { StatusBadge, ModeBadge, type PostStatus } from "@/components/StatusBadge";
+import {
+  StatusBadge,
+  ModeBadge,
+  type PostStatus,
+} from "@/components/StatusBadge";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { CalendarPlus, Pencil, Trash2, RotateCcw, Image, Film, Zap } from "lucide-react";
+import {
+  CalendarPlus,
+  Pencil,
+  Trash2,
+  RotateCcw,
+  Image,
+  Film,
+  Zap,
+} from "lucide-react";
 import { PipelineEmptyState } from "@/components/PipelineEmptyState";
+import {
+  toSaoPauloInput,
+  parseSaoPauloInput,
+  formatSaoPaulo,
+} from "@shared/timezone";
 
 type Mode = "manual" | "aprovar";
 type Media = "image" | "reel";
@@ -56,13 +73,6 @@ const EMPTY: FormState = {
   captionManual: "",
 };
 
-function toLocalInput(ms?: number | null): string {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
-
 export default function Calendar() {
   const utils = trpc.useUtils();
   const posts = trpc.posts.list.useQuery();
@@ -76,7 +86,7 @@ export default function Calendar() {
       toast.success("Post criado");
       setOpen(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const updateMut = trpc.posts.update.useMutation({
     onSuccess: () => {
@@ -84,21 +94,21 @@ export default function Calendar() {
       toast.success("Post atualizado");
       setOpen(false);
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const removeMut = trpc.posts.remove.useMutation({
     onSuccess: () => {
       utils.posts.list.invalidate();
       toast.success("Post removido");
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const reactivateMut = trpc.posts.reactivate.useMutation({
     onSuccess: () => {
       utils.posts.list.invalidate();
       toast.success("Post reativado para Pendente");
     },
-    onError: (e) => toast.error(e.message),
+    onError: e => toast.error(e.message),
   });
   const postNowMut = trpc.posts.postNow.useMutation({
     onSuccess: () => {
@@ -111,7 +121,7 @@ export default function Calendar() {
   const list = posts.data ?? [];
   const filtered = useMemo(() => {
     if (filter === "all") return list;
-    return list.filter((p) => p.status === filter);
+    return list.filter(p => p.status === filter);
   }, [list, filter]);
 
   function openCreate() {
@@ -126,7 +136,7 @@ export default function Calendar() {
       theme: p.theme ?? "",
       mode: (p.mode === "auto" ? "aprovar" : p.mode) as Mode,
       mediaType: p.mediaType as Media,
-      scheduledLocal: toLocalInput(p.scheduledAt),
+      scheduledLocal: toSaoPauloInput(p.scheduledAt),
       captionManual: p.captionManual ?? "",
     });
     setOpen(true);
@@ -137,7 +147,9 @@ export default function Calendar() {
       toast.error("Informe o nome do arquivo no Drive");
       return;
     }
-    const scheduledAt = form.scheduledLocal ? new Date(form.scheduledLocal).getTime() : null;
+    const scheduledAt = form.scheduledLocal
+      ? parseSaoPauloInput(form.scheduledLocal)
+      : null;
     if (form.id) {
       updateMut.mutate({
         id: form.id,
@@ -169,8 +181,9 @@ export default function Calendar() {
               Calendário Editorial
             </h1>
             <p className="mt-1 text-sm text-muted-foreground">
-              Programe as artes da pasta <span className="font-mono text-primary">CybersecCAST</span>{" "}
-              e acompanhe o status de cada publicação.
+              Programe as artes da pasta{" "}
+              <span className="font-mono text-primary">CybersecCAST</span> e
+              acompanhe o status de cada publicação.
             </p>
           </div>
           <div className="flex items-center gap-3">
@@ -182,8 +195,12 @@ export default function Calendar() {
                 <SelectItem value="all">Todos os status</SelectItem>
                 <SelectItem value="Pendente">Pendente</SelectItem>
                 <SelectItem value="Postado">Postado</SelectItem>
-                <SelectItem value="Aguardando Aprovação">Aguardando Aprovação</SelectItem>
-                <SelectItem value="Erro: Imagem Ausente">Erro: Imagem Ausente</SelectItem>
+                <SelectItem value="Aguardando Aprovação">
+                  Aguardando Aprovação
+                </SelectItem>
+                <SelectItem value="Erro: Imagem Ausente">
+                  Erro: Imagem Ausente
+                </SelectItem>
                 <SelectItem value="Fluxo Parado">Fluxo Parado</SelectItem>
               </SelectContent>
             </Select>
@@ -197,11 +214,17 @@ export default function Calendar() {
         <Card>
           <CardContent className="p-0">
             {posts.isLoading ? (
-              <p className="py-16 text-center text-sm text-muted-foreground">Carregando…</p>
+              <p className="py-16 text-center text-sm text-muted-foreground">
+                Carregando…
+              </p>
             ) : filtered.length === 0 ? (
               <div className="p-4">
                 <PipelineEmptyState
-                  title={filter !== "all" ? "Nenhum post com esse status" : "Seu calendário está vazio"}
+                  title={
+                    filter !== "all"
+                      ? "Nenhum post com esse status"
+                      : "Seu calendário está vazio"
+                  }
                   description={
                     filter !== "all"
                       ? "Ajuste o filtro de status ou programe novos posts para preencher a esteira."
@@ -229,7 +252,7 @@ export default function Calendar() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filtered.map((p) => (
+                  {filtered.map(p => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">
                         <div className="flex items-center gap-2">
@@ -238,7 +261,9 @@ export default function Calendar() {
                           ) : (
                             <Image className="h-4 w-4 text-muted-foreground" />
                           )}
-                          <span className="font-mono text-xs">{p.filename}</span>
+                          <span className="font-mono text-xs">
+                            {p.filename}
+                          </span>
                         </div>
                       </TableCell>
                       <TableCell className="max-w-[220px]">
@@ -253,7 +278,7 @@ export default function Calendar() {
                         {p.mediaType === "reel" ? "Reel" : "Imagem"}
                       </TableCell>
                       <TableCell className="text-sm tabular-nums text-muted-foreground">
-                        {p.scheduledAt ? new Date(p.scheduledAt).toLocaleString("pt-BR") : "—"}
+                        {formatSaoPaulo(p.scheduledAt)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={p.status as PostStatus} />
@@ -270,7 +295,8 @@ export default function Calendar() {
                               <Zap className="h-4 w-4 text-yellow-500" />
                             </Button>
                           )}
-                          {(p.status === "Fluxo Parado" || p.status === "Erro: Imagem Ausente") && (
+                          {(p.status === "Fluxo Parado" ||
+                            p.status === "Erro: Imagem Ausente") && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -280,7 +306,12 @@ export default function Calendar() {
                               <RotateCcw className="h-4 w-4" />
                             </Button>
                           )}
-                          <Button variant="ghost" size="icon" title="Editar" onClick={() => openEdit(p)}>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            title="Editar"
+                            onClick={() => openEdit(p)}
+                          >
                             <Pencil className="h-4 w-4" />
                           </Button>
                           <Button
@@ -310,7 +341,8 @@ export default function Calendar() {
               {form.id ? "Editar post" : "Novo post"}
             </DialogTitle>
             <DialogDescription>
-              O nome do arquivo deve corresponder exatamente à arte na pasta CybersecCAST.
+              O nome do arquivo deve corresponder exatamente à arte na pasta
+              CybersecCAST.
             </DialogDescription>
           </DialogHeader>
 
@@ -320,7 +352,7 @@ export default function Calendar() {
               <Input
                 placeholder="ex.: post-phishing.png"
                 value={form.filename}
-                onChange={(e) => setForm({ ...form, filename: e.target.value })}
+                onChange={e => setForm({ ...form, filename: e.target.value })}
               />
             </div>
             <div className="space-y-1.5">
@@ -328,7 +360,7 @@ export default function Calendar() {
               <Input
                 placeholder="ex.: phishing e como se proteger"
                 value={form.theme}
-                onChange={(e) => setForm({ ...form, theme: e.target.value })}
+                onChange={e => setForm({ ...form, theme: e.target.value })}
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
@@ -336,14 +368,16 @@ export default function Calendar() {
                 <Label>Modo da legenda</Label>
                 <Select
                   value={form.mode}
-                  onValueChange={(v) => setForm({ ...form, mode: v as Mode })}
+                  onValueChange={v => setForm({ ...form, mode: v as Mode })}
                 >
                   <SelectTrigger>
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="manual">Manual</SelectItem>
-                    <SelectItem value="aprovar">IA + Aprovação por e-mail</SelectItem>
+                    <SelectItem value="aprovar">
+                      IA + Aprovação por e-mail
+                    </SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -351,7 +385,9 @@ export default function Calendar() {
                 <Label>Tipo de mídia</Label>
                 <Select
                   value={form.mediaType}
-                  onValueChange={(v) => setForm({ ...form, mediaType: v as Media })}
+                  onValueChange={v =>
+                    setForm({ ...form, mediaType: v as Media })
+                  }
                 >
                   <SelectTrigger>
                     <SelectValue />
@@ -364,11 +400,18 @@ export default function Calendar() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Data e hora de publicação</Label>
+              <Label>
+                Data e hora de publicação{" "}
+                <span className="text-xs text-muted-foreground">
+                  (Horário de Brasília)
+                </span>
+              </Label>
               <Input
                 type="datetime-local"
                 value={form.scheduledLocal}
-                onChange={(e) => setForm({ ...form, scheduledLocal: e.target.value })}
+                onChange={e =>
+                  setForm({ ...form, scheduledLocal: e.target.value })
+                }
               />
             </div>
             <div className="space-y-1.5">
@@ -382,16 +425,25 @@ export default function Calendar() {
                 rows={4}
                 placeholder="Deixe em branco para usar a IA (modo aprovar)…"
                 value={form.captionManual}
-                onChange={(e) => setForm({ ...form, captionManual: e.target.value })}
+                onChange={e =>
+                  setForm({ ...form, captionManual: e.target.value })
+                }
               />
             </div>
           </div>
 
           <DialogFooter>
-            <Button variant="outline" className="bg-card" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="bg-card"
+              onClick={() => setOpen(false)}
+            >
               Cancelar
             </Button>
-            <Button onClick={submit} disabled={createMut.isPending || updateMut.isPending}>
+            <Button
+              onClick={submit}
+              disabled={createMut.isPending || updateMut.isPending}
+            >
               {form.id ? "Salvar alterações" : "Criar post"}
             </Button>
           </DialogFooter>
