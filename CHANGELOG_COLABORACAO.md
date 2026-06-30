@@ -26,6 +26,33 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Disparo no horário exato (Opção B — Heartbeat por post)
+
+- **O que mudou:**
+  - Nova coluna `posts.scheduleCronTaskUid varchar(65)` + índice: identifica o Heartbeat cron daquele post no disparo.
+  - `server/schedulePost.ts` (novo): `scheduledAtToCron(ms)` converte UTC ms → expressão cron 6-campos UTC; `schedulePostJob` cria Heartbeat; `cancelPostJob` remove; `runPostHandler` é o handler do callback.
+  - Handler `/api/scheduled/runPost` (Heartbeat, autenticado por `sdk.authenticateRequest`):
+    - Localiza post por `user.taskUid` (nunca por body).
+    - Auto-deleta o cron após disparar (comportamento one-shot).
+    - **Regra 3** (mode=aprovar/auto, sem legenda manual): gera legenda de IA inline (LLM embutido), marca `Aguardando Aprovação`, notifica dono.
+    - **Regras 1+2** (legenda manual presente ou mode=manual): registra log "liberado para executor" — o executor Manus verifica a imagem e publica.
+  - `server/routers/posts.ts`: `create` e `update` chamam `schedulePostJob` se `scheduledAt` é futuro; `remove` e `reactivate` chamam `cancelPostJob`. Erros de scheduling são absorbed (try/catch), não quebram a mutation.
+  - `server/_core/index.ts`: monta `app.post("/api/scheduled/runPost", runPostHandler)`.
+  - `server/schedulePost.test.ts` (novo): 9 testes (timezone, 3 regras de negócio, ciclo de vida, idempotência).
+  - `drizzle/0003_schedule_uid.sql`: migração SQL pronta para aplicar.
+- **Arquivos tocados:** `drizzle/schema.ts`, `drizzle/0003_schedule_uid.sql`, `server/db.ts`, `server/schedulePost.ts` (novo), `server/schedulePost.test.ts` (novo), `server/routers/posts.ts`, `server/_core/index.ts`, `CHANGELOG_COLABORACAO.md`.
+- **Por quê:** pedido do dono via `SPEC — Disparo no horário exato do post (Opção B) + regras de fluxo.md`. Posts agendados para 04:00 eram "percebidos" só às 08:00 pelo cron diário.
+- **Migração de banco?** Sim — arquivo `drizzle/0003_schedule_uid.sql`:
+  ```sql
+  ALTER TABLE `posts` ADD `scheduleCronTaskUid` varchar(65);
+  CREATE INDEX `posts_schedule_uid_idx` ON `posts` (`scheduleCronTaskUid`);
+  ```
+- **Arquitetura Heartbeat (por que não AGENT cron):** O SDK `createHeartbeatJob` CAN be chamado do código do servidor → Heartbeat por post ✅. AGENT crons só podem ser criados via `schedule` tool da sessão Manus (não do código do servidor) — §4b do reference. O Heartbeat dispara no horário exato e executa a lógica do cérebro (Regra 3: IA inline). Para Regras 1+2 (Drive + Instagram), o braço (executor Python) ainda é necessário.
+- **PENDENTE-MANUS (1):** Aplicar migração `drizzle/0003_schedule_uid.sql` em produção.
+- **PENDENTE-MANUS (2):** Para posts com legenda manual, o Heartbeat libera o post às scheduledAt mas o executor ainda roda Ter/Qui. Para posting verdadeiramente no horário, aumentar frequência do executor (ex: a cada 30 min) OU criar um AGENT cron por post após o Manus agendar cada post. Avaliar custo x benefício com o dono.
+- **Branch / PR:** push direto na main.
+- **Testado?** `./node_modules/.bin/vitest run` — 32/32 testes passando (23 anteriores + 9 novos).
+
 ### [2026-06-30] — Claude Code — Multi-conta Instagram (completo) + fix toast
 
 - **O que mudou:**

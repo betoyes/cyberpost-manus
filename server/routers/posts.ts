@@ -2,6 +2,7 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, adminProcedure } from "../_core/trpc";
 import * as db from "../db";
+import { schedulePostJob, cancelPostJob, getSessionToken } from "../schedulePost";
 
 const modeEnum = z.enum(["manual", "aprovar", "auto"]);
 const mediaEnum = z.enum(["image", "reel"]);
@@ -32,7 +33,7 @@ export const postsRouter = router({
         accountId: z.number().nullable().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const id = await db.createPost({
         filename: input.filename,
         theme: input.theme ?? null,
@@ -44,6 +45,15 @@ export const postsRouter = router({
         ...(input.accountId != null ? { accountId: input.accountId } : {}),
         status: "Pendente",
       });
+      // Schedule exact-time Heartbeat cron if scheduledAt is in the future
+      if (input.scheduledAt && input.scheduledAt > Date.now()) {
+        try {
+          const taskUid = await schedulePostJob(id, input.scheduledAt, getSessionToken(ctx.req));
+          await db.updatePost(id, { scheduleCronTaskUid: taskUid });
+        } catch (err) {
+          console.warn("[Schedule] Failed to schedule cron for new post", id, err);
+        }
+      }
       await db.addLog({
         postId: id,
         kind: "criado",
@@ -66,11 +76,32 @@ export const postsRouter = router({
         accountId: z.number().nullable().optional(),
       })
     )
-    .mutation(async ({ input }) => {
+    .mutation(async ({ input, ctx }) => {
       const { id, accountId, ...rest } = input;
       // omit accountId when null so UPDATE works before the migration is applied
       const data = accountId != null ? { ...rest, accountId } : rest;
-      await db.updatePost(id, data);
+
+      // Reschedule cron only when scheduledAt is explicitly provided in the update
+      if (input.scheduledAt !== undefined) {
+        const existing = await db.getPost(id);
+        if (existing?.scheduleCronTaskUid) {
+          await cancelPostJob(existing.scheduleCronTaskUid);
+        }
+        // Apply update with cleared scheduleCronTaskUid
+        await db.updatePost(id, { ...data, scheduleCronTaskUid: null });
+
+        if (input.scheduledAt && input.scheduledAt > Date.now()) {
+          try {
+            const taskUid = await schedulePostJob(id, input.scheduledAt, getSessionToken(ctx.req));
+            await db.updatePost(id, { scheduleCronTaskUid: taskUid });
+          } catch (err) {
+            console.warn("[Schedule] Failed to reschedule cron for post", id, err);
+          }
+        }
+      } else {
+        await db.updatePost(id, data);
+      }
+
       await db.addLog({
         postId: id,
         kind: "editado",
@@ -82,6 +113,10 @@ export const postsRouter = router({
   remove: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
+      const existing = await db.getPost(input.id);
+      if (existing?.scheduleCronTaskUid) {
+        await cancelPostJob(existing.scheduleCronTaskUid);
+      }
       await db.deletePost(input.id);
       return { ok: true };
     }),
@@ -90,7 +125,11 @@ export const postsRouter = router({
   reactivate: adminProcedure
     .input(z.object({ id: z.number() }))
     .mutation(async ({ input }) => {
-      await db.updatePost(input.id, { status: "Pendente", note: null });
+      const existing = await db.getPost(input.id);
+      if (existing?.scheduleCronTaskUid) {
+        await cancelPostJob(existing.scheduleCronTaskUid);
+      }
+      await db.updatePost(input.id, { status: "Pendente", note: null, scheduleCronTaskUid: null });
       await db.addLog({
         postId: input.id,
         kind: "reativado",

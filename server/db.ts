@@ -128,6 +128,17 @@ export async function getPostByApprovalToken(token: string) {
   return rows[0];
 }
 
+export async function getPostByScheduleUid(uid: string) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db
+    .select()
+    .from(posts)
+    .where(eq(posts.scheduleCronTaskUid, uid))
+    .limit(1);
+  return rows[0];
+}
+
 export async function createPost(data: InsertPost) {
   const db = await getDb();
   if (!db) throw new Error("DB unavailable");

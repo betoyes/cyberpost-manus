@@ -9,7 +9,13 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { cron30Handler } from "../scheduled";
-import { queueNextHandler, queueReportHandler, queueApprovalHandler, queueGenerateCaptionHandler } from "../queueApi";
+import {
+  queueNextHandler,
+  queueReportHandler,
+  queueApprovalHandler,
+  queueGenerateCaptionHandler,
+} from "../queueApi";
+import { runPostHandler } from "../schedulePost";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -42,6 +48,8 @@ async function startServer() {
   app.get("/api/health", (_req, res) => res.json({ ok: true }));
   // Scheduled (Heartbeat) cron handler — runs the 30-min brain routine.
   app.post("/api/scheduled/cron30", cron30Handler);
+  // Per-post exact-time dispatch (one-shot Heartbeat per post).
+  app.post("/api/scheduled/runPost", runPostHandler);
   // Execution-queue API consumed by the Manus executor (token-authenticated).
   app.get("/api/queue/next", queueNextHandler);
   app.post("/api/queue/report", queueReportHandler);

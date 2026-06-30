@@ -104,6 +104,9 @@ export const posts = mysqlTable("posts", {
   /** Instagram account to publish to (null = default/legacy account). */
   accountId: int("accountId"),
 
+  /** Manus Heartbeat task UID for the one-shot cron scheduled at this post's exact time. */
+  scheduleCronTaskUid: varchar("scheduleCronTaskUid", { length: 65 }),
+
   /** Free-form note for the latest error/skip reason. */
   note: text("note"),
 
