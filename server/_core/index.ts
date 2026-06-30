@@ -38,6 +38,8 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // Railway / uptime health check
+  app.get("/api/health", (_req, res) => res.json({ ok: true }));
   // Scheduled (Heartbeat) cron handler — runs the 30-min brain routine.
   app.post("/api/scheduled/cron30", cron30Handler);
   // Execution-queue API consumed by the Manus executor (token-authenticated).

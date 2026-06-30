@@ -26,6 +26,17 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Preparação para deploy no Railway
+
+- **O que mudou:** Adicionado `railway.json` com build/start/healthcheck para deploy automático via git push. Adicionado endpoint `GET /api/health` (retorna `{ok:true}`) em `server/_core/index.ts` para o healthcheck do Railway.
+- **Arquivos tocados:** `railway.json` (novo), `server/_core/index.ts`.
+- **Por quê:** Migrar deploy para Railway elimina uso de créditos Manus para cada publicação de versão. Após configuração inicial, deploy = `git push origin main`.
+- **Migração de banco?** Não.
+- **PENDENTE-MANUS:** Criar conta em railway.com, conectar repo `betoyes/cyberpost-manus`, configurar as env vars de produção no painel do Railway (ver lista abaixo), e fazer o primeiro deploy manual. Após isso, todo deploy futuro é automático via git push.
+- **Env vars necessárias no Railway:** `DATABASE_URL`, `JWT_SECRET`, `QUEUE_API_TOKEN`, `VITE_APP_ID`, `OAUTH_SERVER_URL`, `OWNER_OPEN_ID`, `BUILT_IN_FORGE_API_URL`, `BUILT_IN_FORGE_API_KEY`, `NODE_ENV=production`.
+- **Branch / PR:** push direto na main.
+- **Testado?** Build e testes locais OK (23/23). Deploy em produção pendente (primeiro deploy via Railway = PENDENTE-MANUS).
+
 ### [2026-06-30] — Claude Code — Formalização da nova divisão de trabalho
 
 - **O que mudou:** Adicionada seção `## DIVISÃO DE TRABALHO (vigente)` no topo de `INSTRUCOES_PARA_CLAUDE.md`, formalizando que o Claude Code é o desenvolvedor principal responsável por todo o código (incluindo merges e resolução de conflitos na main), e o Manus atua apenas como operador de credenciais (Instagram, Gmail, Drive, cron, deploy). Adicionadas as seções `## FLUXO DE COLABORAÇÃO` (convenção `PENDENTE-MANUS:` no changelog) e `## FILA DE TAREFAS` com as próximas prioridades.
