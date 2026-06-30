@@ -45,27 +45,31 @@
 
 ```
 client/src/
-  pages/            ← Páginas: Home, Calendar, Integrations, Logs, Settings (EDITÁVEL)
-  components/ui/     ← shadcn/ui (NÃO reescrever; reutilizar)
-  App.tsx            ← Registro de rotas (EDITÁVEL com cuidado)
-  index.css          ← Tema/tokens (preserve as @layer base)
+  pages/                  ← Home, Calendar, Accounts, Integrations, Logs, Settings
+  pages/ApprovalConfirm   ← Pág. pública /aprovacao/confirmar (anti-prefetch de e-mail)
+  pages/ApprovalResult    ← Pág. pública /aprovacao (resultado da aprovação por link)
+  components/ui/          ← shadcn/ui — não reescrever; reutilizar
+  App.tsx                 ← Registro de rotas
+  index.css               ← Tema dark (preserve @layer base)
 drizzle/
-  schema.ts          ← Tabelas e tipos (mudanças exigem migração — ver §7)
+  schema.ts               ← Tabelas e tipos (mudanças exigem migração — ver §7)
 server/
-  _core/             ← Infra do template (OAuth, contexto, vite, llm, sdk...) — NÃO editar salvo necessidade real
-  _core/index.ts     ← Bootstrap Express + MAPA DE ROTAS (cron e fila ficam AQUI)
-  db.ts              ← Camada de acesso a dados (helpers de fila críticos)
-  engine.ts          ← REGRAS DE NEGÓCIO (prioridade de legenda, aprovação) — núcleo
-  caption.ts         ← Geração de legenda por IA
-  scheduled.ts       ← Handler do cron diário (rotina do cérebro)
-  queueApi.ts        ← Endpoints da fila (next/report/approval)
-  routers.ts         ← Composição tRPC
-  routers/posts.ts   ← CRUD do calendário (admin)
-  routers/config.ts  ← Settings + logs (admin)
-  *.test.ts          ← Testes vitest (mantenha-os passando)
-instagram_automation.py ← Script EXECUTOR (roda no ambiente do agendamento Manus)
-MANUAL_DE_USO.md     ← Manual para o dono (usuário final)
-DEVELOPER_GUIDE.md   ← Este documento
+  _core/                  ← Infra (OAuth, vite, llm, sdk) — não editar sem necessidade
+  _core/index.ts          ← Bootstrap Express + MAPA DE ROTAS (cron/fila/approval aqui)
+  db.ts                   ← Camada de acesso a dados
+  engine.ts               ← REGRAS DE NEGÓCIO (prioridade de legenda) — núcleo
+  caption.ts              ← Geração de legenda por IA
+  scheduled.ts            ← Handler do cron diário
+  schedulePost.ts         ← Heartbeat por post (disparo no horário exato)
+  approvalHandler.ts      ← Endpoint público GET /api/approval/:postId/:token
+  queueApi.ts             ← Endpoints da fila (next/report/approval)
+  routers.ts              ← Composição tRPC
+  routers/posts.ts        ← CRUD do calendário
+  routers/accounts.ts     ← CRUD de contas Instagram
+  routers/config.ts       ← Settings + logs
+  *.test.ts               ← Testes vitest (41 — mantenha passando)
+instagram_automation.py   ← Executor (roda no ambiente Manus, não no servidor)
+DEVELOPER_GUIDE.md        ← Este documento
 ```
 
 > Tudo sob `server/_core/` é nível de framework. Evite editar a menos que esteja estendendo a infraestrutura conscientemente.
@@ -115,10 +119,13 @@ Definido em `server/_core/index.ts`:
 | Método/Rota | Auth | Função |
 | --- | --- | --- |
 | `POST /api/scheduled/cron30` | Cookie de cron (Heartbeat) | Rotina diária do cérebro (`cron30Handler`) |
+| `POST /api/scheduled/runPost` | Cookie de cron (Heartbeat por post) | Disparo no horário exato — Regra 3 (IA) ou Regras 1+2 (fila) |
+| `GET /api/approval/:postId/:token` | Nenhuma (token na URL) | Aprovação/reprovação de legenda por link no e-mail |
 | `GET /api/queue/next` | Bearer `QUEUE_API_TOKEN` | Entrega a próxima ordem pronta ao executor |
 | `POST /api/queue/report` | Bearer `QUEUE_API_TOKEN` | Executor reporta resultado (posted/missing-image/error) |
-| `POST /api/queue/approval` | Bearer `QUEUE_API_TOKEN` | Registra decisão de aprovação lida do e-mail |
-| `/api/trpc/*` | Sessão de usuário (admin) | CRUD do calendário, settings, logs, auth |
+| `POST /api/queue/approval` | Bearer `QUEUE_API_TOKEN` | Registra decisão de aprovação lida do e-mail (legado) |
+| `POST /api/queue/generate-caption` | Bearer `QUEUE_API_TOKEN` | Gera legenda de IA sob demanda e marca Aguardando Aprovação |
+| `/api/trpc/*` | Sessão de usuário (admin) | CRUD do calendário, contas, settings, logs, auth |
 
 > **Armadilha comum:** procurar a lógica de cron/fila dentro de `routers.ts`. Ela **não está lá** — está nas rotas Express acima. Se mover essas rotas, o cron e o executor param de funcionar.
 
@@ -205,9 +212,10 @@ Injetadas pela plataforma (não commitar `.env`):
 | --- | --- |
 | `DATABASE_URL` | Conexão MySQL/TiDB |
 | `JWT_SECRET` | Assinatura do cookie de sessão |
-| `QUEUE_API_TOKEN` | Token compartilhado app ↔ executor (bearer das rotas `/api/queue/*`) |
+| `QUEUE_API_TOKEN` | Bearer token app ↔ executor (`/api/queue/*`) |
+| `PUBLIC_BASE_URL` | URL pública do app (ex: `https://cyberpost.manus.space`) — usada nos links de aprovação por e-mail |
 | `VITE_APP_ID`, `OAUTH_SERVER_URL`, `VITE_OAUTH_PORTAL_URL` | Manus OAuth |
-| `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` | APIs internas Manus (LLM, storage, etc.) |
+| `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` | APIs internas Manus (LLM, storage) |
 
 > Se mudar o `QUEUE_API_TOKEN`, atualize-o **dos dois lados**: no segredo do app e na variável do agendamento do executor. Caso contrário a fila retorna `401`.
 
@@ -236,16 +244,4 @@ Injetadas pela plataforma (não commitar `.env`):
 
 ---
 
-## 12. Glossário rápido
-
-| Termo | Significado |
-| --- | --- |
-| Cérebro | O app web; decide tudo, roda sem créditos Manus |
-| Braço / Executor | Agendamento Manus + `instagram_automation.py`; executa a postagem |
-| Fila | Ordem de execução exposta por `/api/queue/*` |
-| Heartbeat | Cron HTTP do servidor do app (`/api/scheduled/cron30`) |
-| Fluxo Parado | Estado de segurança: nada é publicado |
-
----
-
-*Documento preparado por Manus AI. Fiel ao código na versão atual do repositório.*
+*Fiel ao código na versão atual do repositório (41 testes vitest).*
