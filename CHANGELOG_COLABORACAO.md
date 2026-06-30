@@ -26,6 +26,26 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Aprovação de legenda por link no e-mail (Opção B1)
+
+- **O que mudou:**
+  - `runPostHandler` (Regra 3): ao gerar legenda de IA, gera `approvalToken` (32 bytes hex = 64 chars), persiste com `approvalEmailSentAt`, e envia e-mail via `notifyOwner` com **legenda completa + links APROVAR/REPROVAR** apontando para a página intermediária de confirmação.
+  - Novo `server/approvalHandler.ts`: endpoint público `GET /api/approval/:postId/:token?decision=approve|reject` — valida token contra `posts.approvalToken` e `status="Aguardando Aprovação"`, aplica decisão, **limpa `approvalToken` (uso único)**, redireciona para `/aprovacao?status=...`.
+  - Proteção contra pré-fetch de e-mail: os links do e-mail apontam para `/aprovacao/confirmar?...` (página React que só exibe), e o botão nessa página navega para `/api/approval/...` (ação real). Assim, scanners de e-mail que fazem GET automático veem apenas a página de confirmação, não executam a ação.
+  - `server/_core/env.ts`: novo campo `publicBaseUrl` (env `PUBLIC_BASE_URL`) para construir os links absolutos.
+  - `server/_core/index.ts`: monta `GET /api/approval/:postId/:token` antes do fallthrough do Vite.
+  - `client/src/pages/ApprovalConfirm.tsx` (novo): rota pública `/aprovacao/confirmar` — lê `postId`, `token`, `decision` da URL, mostra botão de confirmação.
+  - `client/src/pages/ApprovalResult.tsx` (novo): rota pública `/aprovacao` — mostra resultado (aprovado / reprovado / link inválido) baseado em `?status=` e `?file=`.
+  - `client/src/App.tsx`: adiciona rotas `/aprovacao/confirmar` e `/aprovacao` (sem DashboardLayout — páginas públicas).
+  - `server/approvalHandler.test.ts` (novo): 7 testes (aprovar, reprovar, token inválido, já usado, post status errado, decisão inválida, idempotência).
+- **Arquivos tocados:** `server/_core/env.ts`, `server/schedulePost.ts`, `server/approvalHandler.ts` (novo), `server/approvalHandler.test.ts` (novo), `server/_core/index.ts`, `client/src/pages/ApprovalConfirm.tsx` (novo), `client/src/pages/ApprovalResult.tsx` (novo), `client/src/App.tsx`, `CHANGELOG_COLABORACAO.md`.
+- **Por quê:** `notifyOwner` é mão única — dono recebia "legenda gerada" sem legenda nem link de aprovação, travando o post em "Aguardando Aprovação" para sempre.
+- **Migração de banco?** Não — `approvalToken` e `approvalEmailSentAt` já existem no schema desde a criação do projeto.
+- **PENDENTE-MANUS (1):** Setar env `PUBLIC_BASE_URL=https://cyberpost.manus.space` em produção. Sem isso, os links de aprovação no e-mail ficam incompletos (iniciam com `/`).
+- **PENDENTE-MANUS (2):** Verificar que as colunas `approvalToken` e `approvalEmailSentAt` existem no banco de produção (schema original). Se não existirem, gerar migração.
+- **Branch / PR:** push direto na main.
+- **Testado?** `./node_modules/.bin/vitest run` — 40 testes passando.
+
 ### [2026-06-30] — Claude Code — Disparo no horário exato (Opção B — Heartbeat por post)
 
 - **O que mudou:**

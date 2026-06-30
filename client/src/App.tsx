@@ -10,6 +10,8 @@ import Accounts from "./pages/Accounts";
 import Settings from "./pages/Settings";
 import Logs from "./pages/Logs";
 import Integrations from "./pages/Integrations";
+import ApprovalConfirm from "./pages/ApprovalConfirm";
+import ApprovalResult from "./pages/ApprovalResult";
 
 function Router() {
   return (
@@ -20,6 +22,9 @@ function Router() {
       <Route path={"/integrations"} component={Integrations} />
       <Route path={"/logs"} component={Logs} />
       <Route path={"/settings"} component={Settings} />
+      {/* Public approval pages — no login required */}
+      <Route path={"/aprovacao/confirmar"} component={ApprovalConfirm} />
+      <Route path={"/aprovacao"} component={ApprovalResult} />
       <Route path={"/404"} component={NotFound} />
       {/* Final fallback route */}
       <Route component={NotFound} />

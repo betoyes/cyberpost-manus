@@ -7,6 +7,9 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // Base URL for approval links sent by email (e.g. https://cyberpost.manus.space).
+  // PENDENTE-MANUS: set PUBLIC_BASE_URL in production environment.
+  publicBaseUrl: process.env.PUBLIC_BASE_URL ?? "",
   // Shared secret token to authenticate the execution-queue API used by the Manus executor.
   // Getter so tests can set process.env.QUEUE_API_TOKEN after module load.
   get queueApiToken() {

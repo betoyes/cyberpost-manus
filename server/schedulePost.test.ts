@@ -102,7 +102,9 @@ beforeEach(() => {
 
 describe("runPostHandler", () => {
   it("rejects non-cron requests with 403", async () => {
-    vi.mocked(sdk.authenticateRequest).mockResolvedValue({ isCron: false } as any);
+    vi.mocked(sdk.authenticateRequest).mockResolvedValue({
+      isCron: false,
+    } as any);
     const res = makeRes();
     await runPostHandler(makeReq(), res);
     expect(res.status).toHaveBeenCalledWith(403);
@@ -110,7 +112,10 @@ describe("runPostHandler", () => {
   });
 
   it("returns skipped:orphan when no post found for taskUid (idempotency)", async () => {
-    vi.mocked(sdk.authenticateRequest).mockResolvedValue({ isCron: true, taskUid: "uid-gone" } as any);
+    vi.mocked(sdk.authenticateRequest).mockResolvedValue({
+      isCron: true,
+      taskUid: "uid-gone",
+    } as any);
     vi.mocked(dbModule.getPostByScheduleUid).mockResolvedValue(undefined);
     const res = makeRes();
     await runPostHandler(makeReq(), res);
@@ -119,8 +124,15 @@ describe("runPostHandler", () => {
   });
 
   it("Rule 3: generates AI caption and marks Aguardando Aprovação when no manual caption", async () => {
-    const post = makePost({ mode: "aprovar", captionManual: null, theme: "ransomware" });
-    vi.mocked(sdk.authenticateRequest).mockResolvedValue({ isCron: true, taskUid: "uid-abc" } as any);
+    const post = makePost({
+      mode: "aprovar",
+      captionManual: null,
+      theme: "ransomware",
+    });
+    vi.mocked(sdk.authenticateRequest).mockResolvedValue({
+      isCron: true,
+      taskUid: "uid-abc",
+    } as any);
     vi.mocked(dbModule.getPostByScheduleUid).mockResolvedValue(post);
     vi.mocked(dbModule.updatePost).mockResolvedValue(undefined);
     vi.mocked(dbModule.addLog).mockResolvedValue(undefined as any);
@@ -129,15 +141,28 @@ describe("runPostHandler", () => {
     expect(generateCaption).toHaveBeenCalledWith("ransomware");
     expect(dbModule.updatePost).toHaveBeenCalledWith(
       post.id,
-      expect.objectContaining({ status: "Aguardando Aprovação", captionApproved: false })
+      expect.objectContaining({
+        status: "Aguardando Aprovação",
+        captionApproved: false,
+      })
     );
     expect(notifyOwner).toHaveBeenCalled();
-    expect(res.json).toHaveBeenCalledWith({ ok: true, action: "awaiting-approval" });
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      action: "awaiting-approval",
+    });
   });
 
   it("Rule 3 fallback: halts when AI mode but no theme", async () => {
-    const post = makePost({ mode: "aprovar", captionManual: null, theme: null });
-    vi.mocked(sdk.authenticateRequest).mockResolvedValue({ isCron: true, taskUid: "uid-abc" } as any);
+    const post = makePost({
+      mode: "aprovar",
+      captionManual: null,
+      theme: null,
+    });
+    vi.mocked(sdk.authenticateRequest).mockResolvedValue({
+      isCron: true,
+      taskUid: "uid-abc",
+    } as any);
     vi.mocked(dbModule.getPostByScheduleUid).mockResolvedValue(post);
     vi.mocked(dbModule.updatePost).mockResolvedValue(undefined);
     vi.mocked(dbModule.addLog).mockResolvedValue(undefined as any);
@@ -148,12 +173,22 @@ describe("runPostHandler", () => {
       post.id,
       expect.objectContaining({ status: "Fluxo Parado" })
     );
-    expect(res.json).toHaveBeenCalledWith({ ok: true, action: "halted-no-theme" });
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      action: "halted-no-theme",
+    });
   });
 
   it("Rules 1+2: queues for executor when manual caption present", async () => {
-    const post = makePost({ mode: "aprovar", captionManual: "Minha legenda manual", theme: "phishing" });
-    vi.mocked(sdk.authenticateRequest).mockResolvedValue({ isCron: true, taskUid: "uid-abc" } as any);
+    const post = makePost({
+      mode: "aprovar",
+      captionManual: "Minha legenda manual",
+      theme: "phishing",
+    });
+    vi.mocked(sdk.authenticateRequest).mockResolvedValue({
+      isCron: true,
+      taskUid: "uid-abc",
+    } as any);
     vi.mocked(dbModule.getPostByScheduleUid).mockResolvedValue(post);
     vi.mocked(dbModule.updatePost).mockResolvedValue(undefined);
     vi.mocked(dbModule.addLog).mockResolvedValue(undefined as any);
@@ -163,18 +198,45 @@ describe("runPostHandler", () => {
     expect(dbModule.addLog).toHaveBeenCalledWith(
       expect.objectContaining({ kind: "disparo" })
     );
-    expect(res.json).toHaveBeenCalledWith({ ok: true, action: "queued-for-executor" });
+    expect(res.json).toHaveBeenCalledWith({
+      ok: true,
+      action: "queued-for-executor",
+    });
   });
 
-  it("self-deletes the cron after firing (one-shot cleanup)", async () => {
-    const post = makePost({ mode: "manual", captionManual: "Legenda" });
+  it("Rule 3: persists approvalToken (64-char hex) and approvalEmailSentAt", async () => {
+    const post = makePost({ mode: "aprovar", captionManual: null, theme: "zero-day" });
     vi.mocked(sdk.authenticateRequest).mockResolvedValue({ isCron: true, taskUid: "uid-abc" } as any);
     vi.mocked(dbModule.getPostByScheduleUid).mockResolvedValue(post);
     vi.mocked(dbModule.updatePost).mockResolvedValue(undefined);
     vi.mocked(dbModule.addLog).mockResolvedValue(undefined as any);
     const res = makeRes();
     await runPostHandler(makeReq(), res);
+    const captionCall = vi.mocked(dbModule.updatePost).mock.calls.find(
+      ([, data]) => "captionAi" in (data as object)
+    );
+    expect(captionCall).toBeDefined();
+    const data = captionCall![1] as Record<string, unknown>;
+    expect(typeof data.approvalToken).toBe("string");
+    expect((data.approvalToken as string).length).toBe(64);
+    expect(/^[0-9a-f]+$/.test(data.approvalToken as string)).toBe(true);
+    expect(typeof data.approvalEmailSentAt).toBe("number");
+  });
+
+  it("self-deletes the cron after firing (one-shot cleanup)", async () => {
+    const post = makePost({ mode: "manual", captionManual: "Legenda" });
+    vi.mocked(sdk.authenticateRequest).mockResolvedValue({
+      isCron: true,
+      taskUid: "uid-abc",
+    } as any);
+    vi.mocked(dbModule.getPostByScheduleUid).mockResolvedValue(post);
+    vi.mocked(dbModule.updatePost).mockResolvedValue(undefined);
+    vi.mocked(dbModule.addLog).mockResolvedValue(undefined as any);
+    const res = makeRes();
+    await runPostHandler(makeReq(), res);
     expect(deleteHeartbeatJob).toHaveBeenCalledWith("uid-abc", "");
-    expect(dbModule.updatePost).toHaveBeenCalledWith(post.id, { scheduleCronTaskUid: null });
+    expect(dbModule.updatePost).toHaveBeenCalledWith(post.id, {
+      scheduleCronTaskUid: null,
+    });
   });
 });

@@ -16,6 +16,7 @@ import {
   queueGenerateCaptionHandler,
 } from "../queueApi";
 import { runPostHandler } from "../schedulePost";
+import { approvalGetHandler } from "../approvalHandler";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -50,6 +51,8 @@ async function startServer() {
   app.post("/api/scheduled/cron30", cron30Handler);
   // Per-post exact-time dispatch (one-shot Heartbeat per post).
   app.post("/api/scheduled/runPost", runPostHandler);
+  // Public approval-by-link endpoint (no session, validated by token).
+  app.get("/api/approval/:postId/:token", approvalGetHandler);
   // Execution-queue API consumed by the Manus executor (token-authenticated).
   app.get("/api/queue/next", queueNextHandler);
   app.post("/api/queue/report", queueReportHandler);

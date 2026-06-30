@@ -1,9 +1,11 @@
 import type { Request, Response } from "express";
+import { randomBytes } from "crypto";
 import { parse as parseCookieHeader } from "cookie";
 import { COOKIE_NAME } from "@shared/const";
 import { createHeartbeatJob, deleteHeartbeatJob } from "./_core/heartbeat";
 import { sdk } from "./_core/sdk";
 import { notifyOwner } from "./_core/notification";
+import { ENV } from "./_core/env";
 import * as db from "./db";
 import { generateCaption } from "./caption";
 
@@ -55,7 +57,9 @@ export async function schedulePostJob(
  * Cancel the Heartbeat cron for a post. Idempotent — ignores errors if the
  * cron was already deleted or never existed.
  */
-export async function cancelPostJob(scheduleCronTaskUid: string): Promise<void> {
+export async function cancelPostJob(
+  scheduleCronTaskUid: string
+): Promise<void> {
   try {
     await deleteHeartbeatJob(scheduleCronTaskUid, "");
   } catch {
@@ -121,19 +125,39 @@ export async function runPostHandler(req: Request, res: Response) {
       }
 
       const caption = await generateCaption(theme);
+      const approvalToken = randomBytes(32).toString("hex");
+      const approvalEmailSentAt = Date.now();
+
       await db.updatePost(post.id, {
         captionAi: caption,
         status: "Aguardando Aprovação",
         captionApproved: false,
+        approvalToken,
+        approvalEmailSentAt,
       });
       await db.addLog({
         postId: post.id,
         kind: "ia",
-        message: `Horário agendado atingido: legenda de IA gerada para "${post.filename}". Aguardando aprovação por e-mail.`,
+        message: `Horário agendado atingido: legenda de IA gerada para "${post.filename}". Aguardando aprovação por link.`,
       });
+
+      const base = ENV.publicBaseUrl;
+      const approveUrl = `${base}/aprovacao/confirmar?postId=${post.id}&token=${approvalToken}&decision=approve`;
+      const rejectUrl = `${base}/aprovacao/confirmar?postId=${post.id}&token=${approvalToken}&decision=reject`;
+
       await notifyOwner({
-        title: "CybersecCAST: legenda gerada no horário agendado",
-        content: `"${post.filename}" chegou ao horário agendado. Legenda de IA gerada e enviada para aprovação.`,
+        title: `CybersecCAST: legenda gerada — "${post.filename}"`,
+        content: `Post: ${post.filename}
+Tema: ${post.theme ?? "(sem tema)"}
+
+Legenda sugerida pela IA:
+${caption}
+
+Para decidir, clique:
+APROVAR  -> ${approveUrl}
+REPROVAR -> ${rejectUrl}
+
+(Se preferir, edite a legenda manual no painel e o post voltará à fila automaticamente.)`,
       });
       return res.json({ ok: true, action: "awaiting-approval" });
     }
