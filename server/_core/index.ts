@@ -9,7 +9,7 @@ import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
 import { cron30Handler } from "../scheduled";
-import { queueNextHandler, queueReportHandler, queueApprovalHandler } from "../queueApi";
+import { queueNextHandler, queueReportHandler, queueApprovalHandler, queueGenerateCaptionHandler } from "../queueApi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -44,6 +44,7 @@ async function startServer() {
   app.get("/api/queue/next", queueNextHandler);
   app.post("/api/queue/report", queueReportHandler);
   app.post("/api/queue/approval", queueApprovalHandler);
+  app.post("/api/queue/generate-caption", queueGenerateCaptionHandler);
   // tRPC API
   app.use(
     "/api/trpc",

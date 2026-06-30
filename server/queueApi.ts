@@ -3,6 +3,7 @@ import { ENV } from "./_core/env";
 import { notifyOwner } from "./_core/notification";
 import * as db from "./db";
 import { resolveCaption, interpretApprovalReply } from "./engine";
+import { generateCaption } from "./caption";
 
 /**
  * Bridge API between the app (the "brain") and the Manus executor (the "arm").
@@ -26,6 +27,38 @@ function checkToken(req: Request): boolean {
   let diff = 0;
   for (let i = 0; i < token.length; i++) diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
   return diff === 0;
+}
+
+/**
+ * POST /api/queue/generate-caption
+ * Token-authenticated helper to generate (or regenerate) the AI caption for a
+ * post from its theme, persist it, and mark the post 'Aguardando Aprovação'.
+ * Mirrors what the daily brain routine does for AI-mode posts. Body: { postId }.
+ */
+export async function queueGenerateCaptionHandler(req: Request, res: Response) {
+  try {
+    // Allow token auth in all envs; also allow local loopback calls in development
+    // so the operator can trigger a one-off AI caption generation during testing.
+    const isDev = process.env.NODE_ENV === "development";
+    const remote = req.socket.remoteAddress ?? "";
+    const isLoopback = remote.includes("127.0.0.1") || remote.includes("::1");
+    if (!checkToken(req) && !(isDev && isLoopback)) {
+      return res.status(401).json({ error: "unauthorized" });
+    }
+    const { postId } = (req.body ?? {}) as { postId?: number };
+    if (typeof postId !== "number") return res.status(400).json({ error: "postId required" });
+    const post = await db.getPost(postId);
+    if (!post) return res.status(404).json({ error: "post-not-found" });
+    const theme = (post.theme ?? "").trim();
+    if (theme.length === 0) return res.status(400).json({ error: "post has no theme" });
+    const caption = await generateCaption(theme);
+    await db.updatePost(postId, { captionAi: caption, status: "Aguardando Aprovação", captionApproved: false });
+    await db.addLog({ postId, kind: "ia", message: "Legenda gerada por IA. Aguardando aprovação por e-mail." });
+    return res.json({ ok: true, caption });
+  } catch (error) {
+    const err = error as Error;
+    return res.status(500).json({ error: err.message });
+  }
 }
 
 /** GET /api/queue/next */

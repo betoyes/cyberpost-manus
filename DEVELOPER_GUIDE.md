@@ -1,6 +1,8 @@
 # CybersecCAST AutoPost — Guia do Desenvolvedor (Handoff para IA / Devs)
 
 > **Leia este documento por inteiro antes de editar qualquer arquivo.** Ele descreve a arquitetura real, as regras de negócio que **não podem ser quebradas**, e as armadilhas mais comuns. O objetivo é permitir que outra IA ou desenvolvedor faça ajustes sem "sujar" ou quebrar o sistema.
+>
+> **REGRA DE COLABORAÇÃO (obrigatória):** este projeto é mantido em conjunto por **Manus** e **Claude Code**. Toda alteração DEVE ser registrada em **`CHANGELOG_COLABORACAO.md`** (uma entrada nova no topo) antes do commit/PR. Se você é o Claude Code, leia também **`INSTRUCOES_PARA_CLAUDE.md`**. O changelog é o canal de sincronização entre as duas IAs — leia-o ao começar e atualize-o ao terminar.
 
 ---
 
