@@ -11,6 +11,47 @@ Leia este arquivo **antes de qualquer alteração**. Em seguida, leia, nesta ord
 
 ---
 
+## DIVISÃO DE TRABALHO (vigente)
+
+> Estabelecida em 2026-06-30 pelo dono do projeto. Válida até nova instrução explícita.
+
+1. **O Claude Code é responsável por TODO o código**: novas features, correção de bugs, ajustes de UI, refatorações, escrita de testes, **merges e resolução de conflitos na branch main**. O Manus **nunca** faz merge e **nunca** resolve conflitos de git.
+
+2. **O Claude faz push direto na main** após resolver/mesclar (ou via PR + merge), sempre com os testes passando (`./node_modules/.bin/vitest run`).
+
+3. **O Manus (operador de credenciais)** só é acionado para tarefas que **exigem** conectores autenticados ou o ambiente de produção:
+   - Publicar de verdade no Instagram (conector Meta/Instagram).
+   - Enviar e ler e-mails de aprovação de legenda (conector Gmail).
+   - Baixar artes da pasta do Google Drive (conector Drive).
+   - Disparar/gerenciar o cron e o executor em produção (agendador Manus).
+   - Fazer deploy (republicar) o app em `cyberpost.manus.space`.
+
+4. **Fronteira de segurança (INVIOLÁVEL — não alterar sem autorização explícita do dono):**
+   - Legenda **manual** publica direto; legenda de **IA** só publica **após** aprovação por e-mail (`"aprovado"` / `"sim"` / `"yes"`).
+   - `"Postar agora"` **nunca** burla a aprovação: é bloqueado para posts em `"Aguardando Aprovação"`.
+   - Datas/horários sempre em `America/Sao_Paulo` — use `shared/timezone.ts`.
+   - Banco: nunca rodar comandos destrutivos sem combinar. Migrações via Drizzle (`schema.ts` → `drizzle-kit generate` → aplicar SQL), descritas no changelog.
+   - O app é a **fonte única do calendário** (a planilha Google Sheets foi aposentada).
+
+---
+
+## FLUXO DE COLABORAÇÃO (como passamos o bastão)
+
+1. **Claude** desenvolve, testa, resolve conflitos e faz push/merge na `main`. Registra no changelog.
+2. Quando uma tarefa precisar de credenciais (publicar/e-mail/Drive/cron/deploy), escreve no changelog uma entrada com o prefixo **`PENDENTE-MANUS:`** descrevendo exatamente o que o Manus deve operar.
+3. O dono aciona o Manus, que faz `git pull`, executa apenas a parte de credenciais/produção e registra o resultado no changelog.
+
+---
+
+## FILA DE TAREFAS (próximas sessões, por prioridade)
+
+1. **(UX — simples)** Ajustar texto do toast do botão "Postar agora": remover referência a "(Ter/Qui)" — deve dizer apenas "será publicado na próxima execução do robô".
+2. **(Feature)** Multi-conta Instagram: tabela `accounts`, coluna `accountId` em `posts`, seletor de conta no Calendário e filtro por conta. *(Autorização de cada conta no conector = PENDENTE-MANUS.)*
+3. **(Feature)** Suporte a LinkedIn: campo "plataforma de destino" (Instagram/LinkedIn/ambos) no post e na fila. *(Publicação real no LinkedIn depende do conector Publer no Manus = PENDENTE-MANUS.)*
+4. **(Opcional)** Espelho do calendário no Google Sheets como relatório somente-leitura.
+
+---
+
 ## 1. A regra de ouro: o diário de bordo compartilhado
 
 Existe um arquivo chamado **`CHANGELOG_COLABORACAO.md`**. Ele é o ponto de

@@ -26,6 +26,16 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Formalização da nova divisão de trabalho
+
+- **O que mudou:** Adicionada seção `## DIVISÃO DE TRABALHO (vigente)` no topo de `INSTRUCOES_PARA_CLAUDE.md`, formalizando que o Claude Code é o desenvolvedor principal responsável por todo o código (incluindo merges e resolução de conflitos na main), e o Manus atua apenas como operador de credenciais (Instagram, Gmail, Drive, cron, deploy). Adicionadas as seções `## FLUXO DE COLABORAÇÃO` (convenção `PENDENTE-MANUS:` no changelog) e `## FILA DE TAREFAS` com as próximas prioridades.
+- **Arquivos tocados:** `INSTRUCOES_PARA_CLAUDE.md`, `CHANGELOG_COLABORACAO.md`.
+- **Por quê:** Redução de custos — tarefas de código eram executadas pelo Manus a custo alto de créditos; Claude as executa com custo separado.
+- **Migração de banco?** Não.
+- **Pendências para o Manus:** Nenhuma nesta tarefa. Próxima ação do Manus será deploy das mudanças já na main (feat/post-now + feat/free-scheduling) em `cyberpost.manus.space`.
+- **Branch / PR:** push direto na main (apenas documentação).
+- **Testado?** `./node_modules/.bin/vitest run` — 23/23 testes passando.
+
 ### [2026-06-30] — Claude Code — Tarefa 1: botão "Postar agora" + fix de teste
 
 - **O que mudou:**
