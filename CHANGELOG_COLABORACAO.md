@@ -26,6 +26,22 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Tarefa 1: botão "Postar agora" + fix de teste
+
+- **O que mudou:**
+  - Novo mutation tRPC `posts.postNow`: seta `scheduledAt = Date.now()` e `status = "Pendente"` para que o endpoint `GET /api/queue/next` retorne o post na próxima passagem do executor. Guarda-corpos: bloqueia se post já `"Postado"` ou `"Aguardando Aprovação"`.
+  - Botão ⚡ "Postar agora" na coluna de ações do Calendário Editorial (visível apenas para posts `"Pendente"`). Toast informa que a publicação ocorre na próxima execução do robô — não publica no Instagram diretamente.
+  - Fix de bug pré-existente: `ENV.queueApiToken` lido como snapshot no `import` fazia o teste `queueApi.test.ts > accepts requests with the correct token` falhar. Corrigido com getter no `server/_core/env.ts`.
+- **Arquivos tocados:**
+  - `server/_core/env.ts` — getter para `queueApiToken`
+  - `server/routers/posts.ts` — mutation `postNow` + import `TRPCError`
+  - `client/src/pages/Calendar.tsx` — ícone `Zap`, mutation `postNowMut`, botão na tabela
+- **Por quê:** pedido do usuário (alta prioridade); publicação imediata sem alterar regras de segurança de legenda.
+- **Migração de banco?** Não — usa colunas `scheduledAt` e `status` já existentes.
+- **Pendências / próximos passos:** Executor (Manus) já consome `GET /api/queue/next`; nenhuma mudança necessária do lado do Manus para esta tarefa.
+- **Branch / PR:** `feat/post-now` → PR aberto para main.
+- **Testado?** `./node_modules/.bin/vitest run` — 15/15 testes passando (incluindo o teste que estava falhando, agora corrigido).
+
 ### [2026-06-30 03:36 UTC] — Manus — Validação do fluxo de aprovação por e-mail (IA) + endpoint de geração sob demanda
 - **O que mudou:** Adicionado endpoint interno `POST /api/queue/generate-caption` (token-auth; em desenvolvimento também aceita chamada via loopback) que gera a legenda de IA de um post a partir do tema, grava em `captionAi` e marca o post como `Aguardando Aprovação`. Gerada a legenda do Post-Sunny-02 (tema "A Próxima Fase da Observabilidade"), enviado e-mail de aprovação para o usuário, que respondeu **REPROVADO**. Sistema registrou a reprovação e NÃO publicou (comportamento correto).
 - **Arquivos tocados:** `server/queueApi.ts`, `server/_core/index.ts`.

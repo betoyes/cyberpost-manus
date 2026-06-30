@@ -31,7 +31,7 @@ import {
 import { StatusBadge, ModeBadge, type PostStatus } from "@/components/StatusBadge";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { CalendarPlus, Pencil, Trash2, RotateCcw, Image, Film } from "lucide-react";
+import { CalendarPlus, Pencil, Trash2, RotateCcw, Image, Film, Zap } from "lucide-react";
 import { PipelineEmptyState } from "@/components/PipelineEmptyState";
 
 type Mode = "manual" | "aprovar";
@@ -97,6 +97,13 @@ export default function Calendar() {
     onSuccess: () => {
       utils.posts.list.invalidate();
       toast.success("Post reativado para Pendente");
+    },
+    onError: (e) => toast.error(e.message),
+  });
+  const postNowMut = trpc.posts.postNow.useMutation({
+    onSuccess: () => {
+      utils.posts.list.invalidate();
+      toast.success("Post priorizado — será publicado na próxima execução do robô (Ter/Qui)");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -253,6 +260,16 @@ export default function Calendar() {
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center justify-end gap-1">
+                          {p.status === "Pendente" && (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              title="Postar agora"
+                              onClick={() => postNowMut.mutate({ id: p.id })}
+                            >
+                              <Zap className="h-4 w-4 text-yellow-500" />
+                            </Button>
+                          )}
                           {(p.status === "Fluxo Parado" || p.status === "Erro: Imagem Ausente") && (
                             <Button
                               variant="ghost"
