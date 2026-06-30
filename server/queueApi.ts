@@ -85,6 +85,7 @@ export async function queueNextHandler(req: Request, res: Response) {
         caption: cap.caption,
         captionKind: cap.kind,
         driveFolder: "CybersecCAST",
+        accountId: post.accountId ?? null,
       },
     });
   } catch (error) {

@@ -6,8 +6,10 @@ import {
   posts,
   settings,
   activityLogs,
+  accounts,
   type InsertPost,
   type InsertActivityLog,
+  type InsertAccount,
 } from "../drizzle/schema";
 import { ENV } from "./_core/env";
 
@@ -172,6 +174,42 @@ export async function getNextReadyToExecute(nowMs: number) {
     (r) => r.status === "Pendente" || r.status === "Erro: Imagem Ausente",
   );
   return actionable[0];
+}
+
+/* ------------------------------------------------------------------ */
+/* Accounts                                                           */
+/* ------------------------------------------------------------------ */
+
+export async function listAccounts() {
+  const db = await getDb();
+  if (!db) return [];
+  return db.select().from(accounts).orderBy(asc(accounts.id));
+}
+
+export async function getAccount(id: number) {
+  const db = await getDb();
+  if (!db) return undefined;
+  const rows = await db.select().from(accounts).where(eq(accounts.id, id)).limit(1);
+  return rows[0];
+}
+
+export async function createAccount(data: InsertAccount) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  const res = await db.insert(accounts).values(data).$returningId();
+  return res[0]?.id;
+}
+
+export async function updateAccount(id: number, data: Partial<InsertAccount>) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.update(accounts).set(data).where(eq(accounts.id, id));
+}
+
+export async function deleteAccount(id: number) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(accounts).where(eq(accounts.id, id));
 }
 
 /* ------------------------------------------------------------------ */

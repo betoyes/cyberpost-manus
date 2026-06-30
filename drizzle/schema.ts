@@ -1,6 +1,21 @@
 import { bigint, int, mysqlEnum, mysqlTable, text, timestamp, varchar, boolean } from "drizzle-orm/mysql-core";
 
 /**
+ * Instagram accounts configured by the operator (Manus connects each one).
+ */
+export const accounts = mysqlTable("accounts", {
+  id: int("id").autoincrement().primaryKey(),
+  label: varchar("label", { length: 128 }).notNull(),
+  igUserId: varchar("igUserId", { length: 64 }),
+  igUsername: varchar("igUsername", { length: 64 }),
+  active: boolean("active").default(true).notNull(),
+  createdAt: timestamp("createdAt").defaultNow().notNull(),
+});
+
+export type Account = typeof accounts.$inferSelect;
+export type InsertAccount = typeof accounts.$inferInsert;
+
+/**
  * Core user table backing auth flow.
  */
 export const users = mysqlTable("users", {
@@ -69,6 +84,9 @@ export const posts = mysqlTable("posts", {
   approvalEmailSentAt: bigint("approvalEmailSentAt", { mode: "number" }),
   /** Last time a 'missing image' alert email was sent (for the 6h cadence). */
   lastMissingAlertAt: bigint("lastMissingAlertAt", { mode: "number" }),
+
+  /** Instagram account to publish to (null = default/legacy account). */
+  accountId: int("accountId"),
 
   /** Free-form note for the latest error/skip reason. */
   note: text("note"),

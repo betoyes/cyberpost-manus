@@ -29,6 +29,7 @@ export const postsRouter = router({
         mediaType: mediaEnum.default("image"),
         scheduledAt: z.number().nullable().optional(),
         captionManual: z.string().optional(),
+        accountId: z.number().nullable().optional(),
       })
     )
     .mutation(async ({ input }) => {
@@ -39,6 +40,7 @@ export const postsRouter = router({
         mediaType: input.mediaType,
         scheduledAt: input.scheduledAt ?? null,
         captionManual: input.captionManual ?? null,
+        accountId: input.accountId ?? null,
         status: "Pendente",
       });
       await db.addLog({
@@ -60,6 +62,7 @@ export const postsRouter = router({
         scheduledAt: z.number().nullable().optional(),
         captionManual: z.string().nullable().optional(),
         status: statusEnum.optional(),
+        accountId: z.number().nullable().optional(),
       })
     )
     .mutation(async ({ input }) => {

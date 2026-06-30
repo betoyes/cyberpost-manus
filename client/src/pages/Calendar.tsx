@@ -62,6 +62,7 @@ interface FormState {
   mediaType: Media;
   scheduledLocal: string; // datetime-local string
   captionManual: string;
+  accountId: number | null;
 }
 
 const EMPTY: FormState = {
@@ -71,11 +72,14 @@ const EMPTY: FormState = {
   mediaType: "image",
   scheduledLocal: "",
   captionManual: "",
+  accountId: null,
 };
 
 export default function Calendar() {
   const utils = trpc.useUtils();
   const posts = trpc.posts.list.useQuery();
+  const accountsQuery = trpc.accounts.list.useQuery();
+  const accounts = accountsQuery.data ?? [];
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
   const [filter, setFilter] = useState<string>("all");
@@ -113,7 +117,7 @@ export default function Calendar() {
   const postNowMut = trpc.posts.postNow.useMutation({
     onSuccess: () => {
       utils.posts.list.invalidate();
-      toast.success("Post priorizado — será publicado na próxima execução do robô (Ter/Qui)");
+      toast.success("Post priorizado — será publicado na próxima execução do robô");
     },
     onError: (e) => toast.error(e.message),
   });
@@ -138,6 +142,7 @@ export default function Calendar() {
       mediaType: p.mediaType as Media,
       scheduledLocal: toSaoPauloInput(p.scheduledAt),
       captionManual: p.captionManual ?? "",
+      accountId: p.accountId ?? null,
     });
     setOpen(true);
   }
@@ -159,6 +164,7 @@ export default function Calendar() {
         mediaType: form.mediaType,
         scheduledAt,
         captionManual: form.captionManual || null,
+        accountId: form.accountId,
       });
     } else {
       createMut.mutate({
@@ -168,6 +174,7 @@ export default function Calendar() {
         mediaType: form.mediaType,
         scheduledAt,
         captionManual: form.captionManual || undefined,
+        accountId: form.accountId,
       });
     }
   }
@@ -244,6 +251,7 @@ export default function Calendar() {
                   <TableRow className="hover:bg-transparent">
                     <TableHead>Arquivo</TableHead>
                     <TableHead>Tema / Palavras-chave</TableHead>
+                    <TableHead>Conta</TableHead>
                     <TableHead>Modo</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead>Agendado</TableHead>
@@ -270,6 +278,11 @@ export default function Calendar() {
                         <span className="line-clamp-1 text-sm text-muted-foreground">
                           {p.theme || "—"}
                         </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {p.accountId
+                          ? (accounts.find(a => a.id === p.accountId)?.label ?? `#${p.accountId}`)
+                          : "—"}
                       </TableCell>
                       <TableCell>
                         <ModeBadge mode={p.mode} />
@@ -399,6 +412,29 @@ export default function Calendar() {
                 </Select>
               </div>
             </div>
+            {accounts.length > 0 && (
+              <div className="space-y-1.5">
+                <Label>Conta do Instagram</Label>
+                <Select
+                  value={form.accountId != null ? String(form.accountId) : "default"}
+                  onValueChange={v =>
+                    setForm({ ...form, accountId: v === "default" ? null : Number(v) })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="default">Conta padrão</SelectItem>
+                    {accounts.map(a => (
+                      <SelectItem key={a.id} value={String(a.id)}>
+                        {a.label}{a.igUsername ? ` (@${a.igUsername})` : ""}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
             <div className="space-y-1.5">
               <Label>
                 Data e hora de publicação{" "}

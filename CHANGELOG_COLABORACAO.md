@@ -26,6 +26,39 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Multi-conta Instagram + fix toast
+
+- **O que mudou:**
+  - Nova tabela `accounts` (id, label, igUserId, igUsername, active, createdAt) para registrar contas do Instagram.
+  - Coluna `accountId` (nullable int) adicionada à tabela `posts`.
+  - `GET /api/queue/next` passa `accountId` na resposta para o executor Manus saber qual conta usar.
+  - Novo tRPC router `accounts` (list/create/update/remove).
+  - `Calendar.tsx`: seletor de conta no form create/edit (visível apenas quando há contas cadastradas) + coluna "Conta" na tabela.
+  - Fix toast: texto "será publicado na próxima execução do robô" (sem "(Ter/Qui)").
+- **Arquivos tocados:**
+  - `drizzle/schema.ts` — tabela `accounts` + coluna `accountId` em `posts`
+  - `server/db.ts` — CRUD de contas (listAccounts, getAccount, createAccount, updateAccount, deleteAccount)
+  - `server/routers/accounts.ts` — novo router tRPC
+  - `server/routers.ts` — registra `accountsRouter`
+  - `server/routers/posts.ts` — `accountId` em create/update
+  - `server/queueApi.ts` — `accountId` em GET /api/queue/next
+  - `client/src/pages/Calendar.tsx` — seletor de conta + coluna na tabela + fix toast
+- **Migração de banco?** Sim — aplicar o SQL abaixo em produção:
+  ```sql
+  CREATE TABLE accounts (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    label VARCHAR(128) NOT NULL,
+    igUserId VARCHAR(64),
+    igUsername VARCHAR(64),
+    active BOOLEAN NOT NULL DEFAULT TRUE,
+    createdAt TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+  );
+  ALTER TABLE posts ADD COLUMN accountId INT NULL;
+  ```
+- **PENDENTE-MANUS:** (1) Aplicar a migração SQL acima no banco de produção (TiDB/MySQL). (2) Atualizar o executor `instagram_automation.py` para ler o campo `accountId` da fila e usar as credenciais da conta correspondente (ou conta padrão se null). (3) Cadastrar as contas do Instagram pelo painel (Configurações → futura aba de contas, ou via API tRPC diretamente).
+- **Branch / PR:** push direto na main.
+- **Testado?** Vitest — ver resultado abaixo.
+
 ### [2026-06-30] — Claude Code — Preparação para deploy no Railway
 
 - **O que mudou:** Adicionado `railway.json` com build/start/healthcheck para deploy automático via git push. Adicionado endpoint `GET /api/health` (retorna `{ok:true}`) em `server/_core/index.ts` para o healthcheck do Railway.
