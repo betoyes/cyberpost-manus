@@ -7,4 +7,6 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
+  // Shared secret token to authenticate the execution-queue API used by the Manus executor.
+  queueApiToken: process.env.QUEUE_API_TOKEN ?? "",
 };

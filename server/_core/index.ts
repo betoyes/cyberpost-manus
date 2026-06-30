@@ -8,6 +8,8 @@ import { registerStorageProxy } from "./storageProxy";
 import { appRouter } from "../routers";
 import { createContext } from "./context";
 import { serveStatic, setupVite } from "./vite";
+import { cron30Handler } from "../scheduled";
+import { queueNextHandler, queueReportHandler, queueApprovalHandler } from "../queueApi";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -36,6 +38,12 @@ async function startServer() {
   app.use(express.urlencoded({ limit: "50mb", extended: true }));
   registerStorageProxy(app);
   registerOAuthRoutes(app);
+  // Scheduled (Heartbeat) cron handler — runs the 30-min brain routine.
+  app.post("/api/scheduled/cron30", cron30Handler);
+  // Execution-queue API consumed by the Manus executor (token-authenticated).
+  app.get("/api/queue/next", queueNextHandler);
+  app.post("/api/queue/report", queueReportHandler);
+  app.post("/api/queue/approval", queueApprovalHandler);
   // tRPC API
   app.use(
     "/api/trpc",
