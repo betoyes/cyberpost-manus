@@ -40,7 +40,8 @@ export const postsRouter = router({
         mediaType: input.mediaType,
         scheduledAt: input.scheduledAt ?? null,
         captionManual: input.captionManual ?? null,
-        accountId: input.accountId ?? null,
+        // omit accountId when null so the INSERT works before the migration is applied
+        ...(input.accountId != null ? { accountId: input.accountId } : {}),
         status: "Pendente",
       });
       await db.addLog({
@@ -66,8 +67,10 @@ export const postsRouter = router({
       })
     )
     .mutation(async ({ input }) => {
-      const { id, ...rest } = input;
-      await db.updatePost(id, rest);
+      const { id, accountId, ...rest } = input;
+      // omit accountId when null so UPDATE works before the migration is applied
+      const data = accountId != null ? { ...rest, accountId } : rest;
+      await db.updatePost(id, data);
       await db.addLog({
         postId: id,
         kind: "editado",
