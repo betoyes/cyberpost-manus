@@ -26,6 +26,26 @@ Copie o modelo abaixo e preencha no **topo** da seção "Histórico" (mais recen
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Tarefa 2: fix de timezone + agendamento livre para qualquer data/hora
+
+- **O que mudou:**
+  - **Bug corrigido:** o campo de agendamento usava `getHours()` / `new Date(str).getTime()` que dependem do fuso do browser — se o browser estiver em UTC (comum em servidores/VMs), horas eram salvas 3h adiantadas. Agora fixado explicitamente para `America/Sao_Paulo`.
+  - Criado `shared/timezone.ts` com três funções puras: `toSaoPauloInput(ms)` (UTC ms → string para `<input type="datetime-local">`), `parseSaoPauloInput(str)` (string SP → UTC ms, usa offset `-03:00` fixo pois BR não tem DST desde 2019), `formatSaoPaulo(ms)` (UTC ms → string legível em pt-BR/SP).
+  - `Calendar.tsx`: remove `toLocalInput` (bugada), importa utilitários de SP, label no campo diz "(Horário de Brasília)", coluna "Agendado" agora sempre exibe hora de Brasília independente do fuso do browser.
+  - `Home.tsx`: "Próximas publicações" agora exibe hora de Brasília.
+  - **Agendamento livre confirmado:** sem restrição de dia/hora no frontend — o executor do Manus (Ter/Qui) pega qualquer post com `scheduledAt <= now`.
+- **Arquivos tocados:**
+  - `shared/timezone.ts` — novo utilitário (criado)
+  - `server/timezone.test.ts` — 8 novos testes cobrindo toSaoPauloInput, parseSaoPauloInput, formatSaoPaulo e round-trip
+  - `server/_core/env.ts` — getter `queueApiToken` (fix de snapshot em testes — também está em feat/post-now)
+  - `client/src/pages/Calendar.tsx` — timezone fix + label "Horário de Brasília"
+  - `client/src/pages/Home.tsx` — timezone fix na listagem
+- **Por quê:** usuário relatou "erro de cadastro de horário"; horas estavam dependentes do fuso do browser em vez de São Paulo.
+- **Migração de banco?** Não — `scheduledAt` já é UTC ms; a mudança é só na camada de exibição/parse da UI.
+- **Pendências / próximos passos:** Nenhuma para o Manus nesta tarefa. Se o Manus precisar exibir datas em outros pontos, usar `formatSaoPaulo` do `shared/timezone.ts`.
+- **Branch / PR:** `feat/free-scheduling` → PR aberto para main.
+- **Testado?** `./node_modules/.bin/vitest run` — 23/23 testes passando (15 originais + 8 novos de timezone).
+
 ### [2026-06-30 03:36 UTC] — Manus — Validação do fluxo de aprovação por e-mail (IA) + endpoint de geração sob demanda
 - **O que mudou:** Adicionado endpoint interno `POST /api/queue/generate-caption` (token-auth; em desenvolvimento também aceita chamada via loopback) que gera a legenda de IA de um post a partir do tema, grava em `captionAi` e marca o post como `Aguardando Aprovação`. Gerada a legenda do Post-Sunny-02 (tema "A Próxima Fase da Observabilidade"), enviado e-mail de aprovação para o usuário, que respondeu **REPROVADO**. Sistema registrou a reprovação e NÃO publicou (comportamento correto).
 - **Arquivos tocados:** `server/queueApi.ts`, `server/_core/index.ts`.

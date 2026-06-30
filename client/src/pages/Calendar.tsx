@@ -33,6 +33,7 @@ import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
 import { CalendarPlus, Pencil, Trash2, RotateCcw, Image, Film } from "lucide-react";
 import { PipelineEmptyState } from "@/components/PipelineEmptyState";
+import { toSaoPauloInput, parseSaoPauloInput, formatSaoPaulo } from "@shared/timezone";
 
 type Mode = "manual" | "aprovar";
 type Media = "image" | "reel";
@@ -56,12 +57,6 @@ const EMPTY: FormState = {
   captionManual: "",
 };
 
-function toLocalInput(ms?: number | null): string {
-  if (!ms) return "";
-  const d = new Date(ms);
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
-}
 
 export default function Calendar() {
   const utils = trpc.useUtils();
@@ -119,7 +114,7 @@ export default function Calendar() {
       theme: p.theme ?? "",
       mode: (p.mode === "auto" ? "aprovar" : p.mode) as Mode,
       mediaType: p.mediaType as Media,
-      scheduledLocal: toLocalInput(p.scheduledAt),
+      scheduledLocal: toSaoPauloInput(p.scheduledAt),
       captionManual: p.captionManual ?? "",
     });
     setOpen(true);
@@ -130,7 +125,7 @@ export default function Calendar() {
       toast.error("Informe o nome do arquivo no Drive");
       return;
     }
-    const scheduledAt = form.scheduledLocal ? new Date(form.scheduledLocal).getTime() : null;
+    const scheduledAt = form.scheduledLocal ? parseSaoPauloInput(form.scheduledLocal) : null;
     if (form.id) {
       updateMut.mutate({
         id: form.id,
@@ -246,7 +241,7 @@ export default function Calendar() {
                         {p.mediaType === "reel" ? "Reel" : "Imagem"}
                       </TableCell>
                       <TableCell className="text-sm tabular-nums text-muted-foreground">
-                        {p.scheduledAt ? new Date(p.scheduledAt).toLocaleString("pt-BR") : "—"}
+                        {formatSaoPaulo(p.scheduledAt)}
                       </TableCell>
                       <TableCell>
                         <StatusBadge status={p.status as PostStatus} />
@@ -347,7 +342,10 @@ export default function Calendar() {
               </div>
             </div>
             <div className="space-y-1.5">
-              <Label>Data e hora de publicação</Label>
+              <Label>
+                Data e hora de publicação{" "}
+                <span className="text-xs text-muted-foreground">(Horário de Brasília)</span>
+              </Label>
               <Input
                 type="datetime-local"
                 value={form.scheduledLocal}

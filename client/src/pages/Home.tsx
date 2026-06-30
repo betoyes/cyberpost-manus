@@ -13,6 +13,7 @@ import {
   ShieldCheck,
   Plug,
 } from "lucide-react";
+import { formatSaoPaulo } from "@shared/timezone";
 import { PipelineEmptyState } from "@/components/PipelineEmptyState";
 
 function StatCard({
@@ -143,9 +144,7 @@ export default function Home() {
                         <p className="truncate text-xs text-muted-foreground">
                           {p.theme || "Sem tema"} ·{" "}
                           <span className="cc-meta">
-                            {p.scheduledAt
-                              ? new Date(p.scheduledAt).toLocaleString("pt-BR")
-                              : "Sem data"}
+                            {p.scheduledAt ? formatSaoPaulo(p.scheduledAt) : "Sem data"}
                           </span>
                         </p>
                       </div>
