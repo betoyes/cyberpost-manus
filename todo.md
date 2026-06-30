@@ -30,14 +30,14 @@
 ## Cron / Agendamento (Heartbeat - sem créditos Manus)
 - [x] Handler /api/scheduled/cron30 (verifica pendentes, gera legenda, define estado)
 - [x] Alerta de imagem ausente a cada 6h (cadência no cron)
-- [ ] Registrar cron de 30min após deploy (depende de deploy do usuário)
+- [x] Cron registrado após deploy (agora diário, 08h Brasília)
 
 ## Testes e Entrega
 - [x] Testes vitest da lógica de prioridade de legenda (8) e auth do token da fila (3)
 - [x] Validação do secret QUEUE_API_TOKEN via teste
-- [ ] Checkpoint salvo
-- [ ] Configurar agendamento do Manus (Ter/Qui) como executor da fila
-- [ ] Manual de uso + guia da arquitetura
+- [x] Checkpoint salvo (c64b3077)
+- [x] Configurar agendamento do Manus (Ter/Qui) como executor da fila
+- [x] Manual de uso + guia da arquitetura
 
 ## Notas
 - Modelo híbrido (Opção 2 + Forma A) confirmado pelo usuário.
@@ -51,4 +51,4 @@
 - [x] Cron server-side (Heartbeat) registrado: cyberseccast-brain-daily (task_uid AqUEqMKax9BNyrv8xQgmFN)
 - [x] instagram_automation.py reescrito: consome /api/queue/next e reporta via /api/queue/report
 - [x] Agendamento Manus (Ter/Qui 8h/17h) atualizado para usar a fila do app (Opção 1: app = fonte única)
-- [ ] Manual de uso final + guia da arquitetura (em elaboração)
+- [x] Manual de uso final + guia da arquitetura (MANUAL_DE_USO.md)
