@@ -30,6 +30,18 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Fix: invalid_client no login Google (Railway) — normalização + diagnóstico
+
+- **Contexto:** login Google (§6B) publicado no commit `5b5b4ef` falhava em produção no Railway com `GaxiosError: invalid_client` no `client.getToken(code)`, mesmo após o dono confirmar `GOOGLE_CLIENT_ID`/`VITE_GOOGLE_CLIENT_ID` idênticos, `GOOGLE_CLIENT_SECRET` recriado e redeployado, tipo de OAuth Client "Web application" e redirect URI cadastrado corretamente.
+- **O que mudou:**
+  - `server/_core/env.ts`: `googleClientId`/`googleClientSecret` agora aplicam `.trim()` sobre `process.env.GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` — protege contra espaço/quebra de linha acidental ao colar o valor no painel do Railway (causa mais provável do `invalid_client`, já que o código/versão da lib `google-auth-library` foram auditados e estão corretos).
+  - `server/_core/oauth.ts`: log de diagnóstico seguro imediatamente antes de `client.getToken(code)` — `clientIdLength`, `clientIdLast12` (últimos 12 caracteres, não o valor completo), `clientSecretLength`, `clientSecretHasGocspxPrefix` (booleano) e `redirectUri`. **Nunca loga o client secret inteiro.** No `catch` do callback, também loga `error.response?.data` (corpo do erro devolvido pelo Google, ex. `{error: "invalid_client", error_description: "..."}`) para diagnosticar sem precisar adivinhar.
+- **Arquivos tocados:** `server/_core/env.ts`, `server/_core/oauth.ts`.
+- **Migração de banco?** Não.
+- **Testado?** `server/_core/oauth.test.ts` (6 testes) + `server/auth.logout.test.ts` continuam passando. `tsc --noEmit` sem erros. `npm run build` (mesmo comando do Railway) compila sem erros.
+- **Próximo passo do dono:** após o deploy, tentar o login de novo e checar os logs do Railway pela linha `[OAuth] Google token exchange debug` — confirmar se `clientIdLength`/`clientSecretLength` batem com o tamanho esperado das credenciais, e se `client.getToken` continuar falhando, o `[OAuth] Google error response data` vai trazer o motivo exato que o Google está devolvendo.
+- **Branch / PR:** push direto na main.
+
 ### [2026-06-30] — Claude Code — Login próprio (Google Sign-In) — independência §6B
 
 - **O que mudou (HANDOFF_INDEPENDENCIA_MANUS.md §6B — decisão tomada com o dono: trocar auth próprio desde já, antes de mexer em §6/hospedagem):**

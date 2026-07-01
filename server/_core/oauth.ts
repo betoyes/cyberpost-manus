@@ -40,6 +40,16 @@ export function registerOAuthRoutes(app: Express) {
         redirectUri,
       });
 
+      // Safe diagnostic log for invalid_client troubleshooting — never logs
+      // the secret itself, only length/prefix metadata plus the redirectUri.
+      console.log("[OAuth] Google token exchange debug", {
+        clientIdLength: ENV.googleClientId.length,
+        clientIdLast12: ENV.googleClientId.slice(-12),
+        clientSecretLength: ENV.googleClientSecret.length,
+        clientSecretHasGocspxPrefix: ENV.googleClientSecret.startsWith("GOCSPX-"),
+        redirectUri,
+      });
+
       const { tokens } = await client.getToken(code);
       if (!tokens.id_token) {
         res.status(400).json({ error: "Google did not return an id_token" });
@@ -92,7 +102,12 @@ export function registerOAuthRoutes(app: Express) {
 
       res.redirect(302, "/");
     } catch (error) {
+      const googleErrorData = (error as { response?: { data?: unknown } })
+        ?.response?.data;
       console.error("[OAuth] Google callback failed", error);
+      if (googleErrorData) {
+        console.error("[OAuth] Google error response data", googleErrorData);
+      }
       res.status(500).json({ error: "OAuth callback failed" });
     }
   });

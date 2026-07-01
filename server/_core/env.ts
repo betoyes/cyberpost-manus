@@ -16,11 +16,13 @@ export const ENV = {
     return process.env.EMAIL_OWNER ?? "";
   },
   // Own login provider (Google Sign-In). Replaces the Manus OAuth portal — §6B.
+  // .trim() guards against accidental leading/trailing whitespace or newlines
+  // when pasting the value into Railway (a common cause of invalid_client).
   get googleClientId() {
-    return process.env.GOOGLE_CLIENT_ID ?? "";
+    return (process.env.GOOGLE_CLIENT_ID ?? "").trim();
   },
   get googleClientSecret() {
-    return process.env.GOOGLE_CLIENT_SECRET ?? "";
+    return (process.env.GOOGLE_CLIENT_SECRET ?? "").trim();
   },
   // Shared secret token to authenticate the execution-queue API used by the Manus executor.
   // Getter so tests can set process.env.QUEUE_API_TOKEN after module load.
