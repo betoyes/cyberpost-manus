@@ -22,6 +22,10 @@ export type SessionPayload = {
   openId: string;
   appId: string;
   name: string;
+  // Optional: marks sessions created by our own login providers (e.g.
+  // "google" — §6B) so authenticateRequest can skip the legacy Manus
+  // OAuth sync below, which cannot resolve non-Manus session tokens.
+  loginMethod?: string;
 };
 
 // Fallback appId claim for session JWTs when ENV.appId (VITE_APP_ID, the
@@ -172,7 +176,11 @@ class SDKServer {
    */
   async createSessionToken(
     openId: string,
-    options: { expiresInMs?: number; name?: string } = {}
+    options: {
+      expiresInMs?: number;
+      name?: string;
+      loginMethod?: string;
+    } = {}
   ): Promise<string> {
     return this.signSession(
       {
@@ -184,6 +192,7 @@ class SDKServer {
         // fail validation.
         appId: ENV.appId || SESSION_APP_ID,
         name: options.name || "",
+        loginMethod: options.loginMethod,
       },
       options
     );
@@ -202,15 +211,22 @@ class SDKServer {
       openId: payload.openId,
       appId: payload.appId,
       name: payload.name,
+      ...(payload.loginMethod ? { loginMethod: payload.loginMethod } : {}),
     })
       .setProtectedHeader({ alg: "HS256", typ: "JWT" })
       .setExpirationTime(expirationSeconds)
       .sign(secretKey);
   }
 
-  async verifySession(
-    cookieValue: string | undefined | null
-  ): Promise<{ openId: string; appId: string; name: string } | null> {
+  async verifySession(cookieValue: string | undefined | null): Promise<
+    | {
+        openId: string;
+        appId: string;
+        name: string;
+        loginMethod?: string;
+      }
+    | null
+  > {
     if (!cookieValue) {
       console.warn("[Auth] Missing session cookie");
       return null;
@@ -221,7 +237,10 @@ class SDKServer {
       const { payload } = await jwtVerify(cookieValue, secretKey, {
         algorithms: ["HS256"],
       });
-      const { openId, appId, name } = payload as Record<string, unknown>;
+      const { openId, appId, name, loginMethod } = payload as Record<
+        string,
+        unknown
+      >;
 
       if (
         !isNonEmptyString(openId) ||
@@ -236,6 +255,7 @@ class SDKServer {
         openId,
         appId,
         name,
+        loginMethod: isNonEmptyString(loginMethod) ? loginMethod : undefined,
       };
     } catch (error) {
       console.warn("[Auth] Session verification failed", String(error));
@@ -301,8 +321,13 @@ class SDKServer {
     const signedInAt = new Date();
     let user = await db.getUserByOpenId(sessionUserId);
 
-    // If user not in DB, sync from OAuth server automatically
-    if (!user) {
+    // If user not in DB, sync from the legacy Manus OAuth server — but only
+    // for sessions actually issued by Manus. Google sessions (§6B,
+    // session.loginMethod === "google") are self-signed JWTs that Manus's
+    // GetUserInfoWithJwt endpoint cannot resolve; calling it there returns no
+    // openId and previously crashed db.upsertUser ("User openId is required
+    // for upsert"), forcing a login loop.
+    if (!user && session.loginMethod !== "google") {
       try {
         const userInfo = await this.getUserInfoWithJwt(sessionToken ?? "");
         await db.upsertUser({

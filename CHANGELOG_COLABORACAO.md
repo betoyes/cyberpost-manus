@@ -30,6 +30,19 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Fix: login Google entrava em loop por sync legado da Manus
+
+- **Contexto:** depois do fix de `appId` vazio (commit `7b1f899`), o login Google concluía e a sessão JWT passava na validação, mas o app entrava em loop de login. Logs do Railway mostravam `[Auth] Failed to sync user from OAuth: Error: User openId is required for upsert`, originado em `upsertUser` ← `SDKServer.authenticateRequest` ← `createContext`.
+- **Causa raiz:** `authenticateRequest` (`server/_core/sdk.ts`), quando `db.getUserByOpenId(session.openId)` não encontra o usuário, tenta um fallback de "sincronizar do OAuth" chamando `getUserInfoWithJwt` — um endpoint da **Manus** (`GetUserInfoWithJwt`, via `axios`/`ENV.oAuthServerUrl`). Esse endpoint não sabe validar um JWT autoassinado do nosso próprio login Google; a resposta não trazia `openId`, e o código tentava `db.upsertUser({ openId: undefined, ... })`, que lança `"User openId is required for upsert"` — capturado, logado, e convertido em `ForbiddenError`, derrubando toda sessão recém-criada e mandando o front de volta pro login (loop).
+- **O que mudou:**
+  - `server/_core/sdk.ts`: `SessionPayload`/`createSessionToken`/`signSession`/`verifySession` agora carregam um campo opcional `loginMethod` no JWT de sessão (sem tornar `openId`/`appId`/`name` opcionais — a validação de campos obrigatórios em `verifySession` **não foi alterada**). Em `authenticateRequest`, o fallback de sincronização legada da Manus só roda quando `session.loginMethod !== "google"` — para sessões Google, se o usuário não for encontrado no banco, o código agora lança `ForbiddenError("User not found")` diretamente, sem tentar o endpoint da Manus. Usuário Google que já existe no banco (caso normal, já criado pelo próprio callback) continua carregando via `db.getUserByOpenId` sem nenhuma mudança de caminho.
+  - `server/_core/oauth.ts`: `sdk.createSessionToken` no callback do Google agora passa `loginMethod: "google"`, marcando a sessão para o `authenticateRequest` acima.
+- **Não alterado:** `openId` continua **obrigatório** em `db.upsertUser` (guard global intacto); sessões sem `loginMethod` (legado Manus, se algum dia existirem) continuam usando o fluxo de sync antigo normalmente — mudança é aditiva, não removeu nenhum caminho existente.
+- **Arquivos tocados:** `server/_core/sdk.ts`, `server/_core/oauth.ts`.
+- **Migração de banco?** Não.
+- **Testado?** `server/_core/sdk.test.ts` ganhou 3 testes novos cobrindo exatamente o cenário do bug: sessão Google com usuário já no banco não chama o sync legado (`axios.post` nunca invocado); sessão Google com usuário ausente do banco lança erro limpo sem chamar o sync nem `db.upsertUser`; sessão sem `loginMethod` (compatibilidade) continua chamando o sync legado normalmente. Suíte completa: 72/72 passando. `tsc --noEmit` sem erros. `npm run build` (mesmo comando do Railway) compila sem erros.
+- **Branch / PR:** push direto na main.
+
 ### [2026-06-30] — Claude Code — Fix: sessão do login Google rejeitada ("Session payload missing required fields")
 
 - **Contexto:** depois do fix de `invalid_client` (commit `1f94d6b`), o callback do Google passou a completar sem erro, mas todo request autenticado subsequente falhava com `[Auth] Session payload missing required fields` nos logs do Railway — o usuário nunca ficava de fato logado.

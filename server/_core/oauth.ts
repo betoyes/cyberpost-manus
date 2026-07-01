@@ -46,7 +46,8 @@ export function registerOAuthRoutes(app: Express) {
         clientIdLength: ENV.googleClientId.length,
         clientIdLast12: ENV.googleClientId.slice(-12),
         clientSecretLength: ENV.googleClientSecret.length,
-        clientSecretHasGocspxPrefix: ENV.googleClientSecret.startsWith("GOCSPX-"),
+        clientSecretHasGocspxPrefix:
+          ENV.googleClientSecret.startsWith("GOCSPX-"),
         redirectUri,
       });
 
@@ -92,6 +93,7 @@ export function registerOAuthRoutes(app: Express) {
       const sessionToken = await sdk.createSessionToken(payload.sub, {
         name: payload.name || "",
         expiresInMs: ONE_YEAR_MS,
+        loginMethod: "google",
       });
 
       const cookieOptions = getSessionCookieOptions(req);
