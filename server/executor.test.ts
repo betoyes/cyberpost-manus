@@ -133,6 +133,25 @@ describe("runExecutionForPost", () => {
     expect(downloadDriveImage).not.toHaveBeenCalled();
   });
 
+  it("stops with Fluxo Parado when no Meta token is saved", async () => {
+    vi.mocked(db.getPost).mockResolvedValue({ ...basePost } as any);
+    vi.mocked(db.resolvePostAccount).mockResolvedValue({
+      id: 1,
+      name: "Conta",
+      handle: null,
+      igUserId: "ig-1",
+    });
+    vi.mocked(db.getSetting).mockResolvedValue(null);
+
+    await runExecutionForPost(1);
+
+    expect(db.updatePost).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ status: "Fluxo Parado" })
+    );
+    expect(downloadDriveImage).not.toHaveBeenCalled();
+  });
+
   it("marks Erro: Imagem Ausente when the Drive file is not found", async () => {
     vi.mocked(db.getPost).mockResolvedValue({ ...basePost } as any);
     vi.mocked(db.resolvePostAccount).mockResolvedValue({
@@ -141,6 +160,7 @@ describe("runExecutionForPost", () => {
       handle: null,
       igUserId: "ig-1",
     });
+    vi.mocked(db.getSetting).mockResolvedValue("meta-token");
     vi.mocked(downloadDriveImage).mockResolvedValue(null);
 
     await runExecutionForPost(1);

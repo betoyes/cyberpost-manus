@@ -71,3 +71,45 @@ export async function publishImageToInstagram(params: {
 
   return { mediaId, permalink };
 }
+
+export type ConnectionTestResult =
+  | { ok: true; username: string | null }
+  | { ok: false; message: string };
+
+/**
+ * Read-only connectivity check for the "Testar conexão Meta" button — never
+ * publishes anything. Fetches basic profile fields for igUserId with the
+ * given token and reports success/failure with a short, sanitized message
+ * (never the token, never the raw Graph API error payload).
+ */
+export async function testInstagramConnection(params: {
+  igUserId: string;
+  accessToken: string;
+}): Promise<ConnectionTestResult> {
+  const { igUserId, accessToken } = params;
+
+  try {
+    const url = new URL(`${GRAPH_API_BASE}/${igUserId}`);
+    url.searchParams.set("fields", "id,username");
+    url.searchParams.set("access_token", accessToken);
+
+    const response = await fetch(url);
+    const data = (await response.json()) as {
+      username?: string;
+      error?: { message?: string; type?: string; code?: number };
+    };
+
+    if (!response.ok) {
+      const summary =
+        data?.error?.message?.slice(0, 200) ??
+        `HTTP ${response.status} ${response.statusText}`;
+      return { ok: false, message: summary };
+    }
+
+    return { ok: true, username: data.username ?? null };
+  } catch {
+    // A network-level error's message could theoretically embed the request
+    // URL (which carries access_token as a query param) — never echo it back.
+    return { ok: false, message: "Falha de rede ao conectar com a Meta API." };
+  }
+}

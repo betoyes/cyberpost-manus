@@ -3,7 +3,10 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const mockFetch = vi.fn();
 vi.stubGlobal("fetch", mockFetch);
 
-import { publishImageToInstagram } from "./instagramGraph";
+import {
+  publishImageToInstagram,
+  testInstagramConnection,
+} from "./instagramGraph";
 
 describe("publishImageToInstagram", () => {
   beforeEach(() => {
@@ -105,5 +108,73 @@ describe("publishImageToInstagram", () => {
     });
 
     expect(result).toEqual({ mediaId: "media-1", permalink: null });
+  });
+});
+
+describe("testInstagramConnection", () => {
+  beforeEach(() => {
+    mockFetch.mockReset();
+  });
+
+  it("returns ok + username on success, using a read-only GET (no publish calls)", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: true,
+      json: async () => ({ id: "ig-1", username: "cyberseccast" }),
+    });
+
+    const result = await testInstagramConnection({
+      igUserId: "ig-1",
+      accessToken: "token",
+    });
+
+    expect(result).toEqual({ ok: true, username: "cyberseccast" });
+    expect(mockFetch).toHaveBeenCalledTimes(1);
+    const [calledUrl] = mockFetch.mock.calls[0];
+    expect(String(calledUrl)).not.toContain("/media");
+  });
+
+  it("returns a short sanitized message on Graph API error, without the full payload", async () => {
+    mockFetch.mockResolvedValueOnce({
+      ok: false,
+      status: 401,
+      statusText: "Unauthorized",
+      json: async () => ({
+        error: {
+          message: "Invalid OAuth access token.",
+          type: "OAuthException",
+          code: 190,
+        },
+      }),
+    });
+
+    const result = await testInstagramConnection({
+      igUserId: "ig-1",
+      accessToken: "expired-token",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).toBe("Invalid OAuth access token.");
+      expect(result.message).not.toContain("expired-token");
+    }
+  });
+
+  it("returns a fixed generic message when fetch itself throws (network error) — never echoes error.message, which could embed the token-bearing URL", async () => {
+    mockFetch.mockRejectedValueOnce(
+      new Error(
+        "fetch failed: https://graph.facebook.com/v21.0/ig-1?access_token=super-secret"
+      )
+    );
+
+    const result = await testInstagramConnection({
+      igUserId: "ig-1",
+      accessToken: "super-secret",
+    });
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.message).not.toContain("super-secret");
+      expect(result.message).not.toContain("access_token");
+    }
   });
 });

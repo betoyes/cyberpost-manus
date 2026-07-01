@@ -34,7 +34,8 @@ export async function runExecutionForPost(postId: number): Promise<void> {
   }
 
   // Rules 1+2: manual caption present or manual mode — download from Drive
-  // and publish to Instagram.
+  // and publish to Instagram. Account + token are validated up front so a
+  // misconfigured setup never wastes a Drive API call.
   const account = await db.resolvePostAccount(post);
   if (!account?.igUserId) {
     await db.updatePost(postId, {
@@ -49,6 +50,24 @@ export async function runExecutionForPost(postId: number): Promise<void> {
     await notifyOwner({
       title: "CybersecCAST: conta Instagram ausente",
       content: `"${post.filename}" não pôde ser publicado: nenhuma conta Instagram configurada.`,
+    });
+    return;
+  }
+
+  const metaToken = await db.getSetting("meta_access_token");
+  if (!metaToken) {
+    await db.updatePost(postId, {
+      status: "Fluxo Parado",
+      note: "Token do Meta não configurado (ver tela de Contas Instagram).",
+    });
+    await db.addLog({
+      postId,
+      kind: "error",
+      message: `Token do Meta não configurado para "${post.filename}". Fluxo parado.`,
+    });
+    await notifyOwner({
+      title: "CybersecCAST: token Meta ausente",
+      content: `"${post.filename}" não pôde ser publicado: token do Meta não configurado.`,
     });
     return;
   }
@@ -91,13 +110,6 @@ export async function runExecutionForPost(postId: number): Promise<void> {
   }
 
   try {
-    const metaToken = await db.getSetting("meta_access_token");
-    if (!metaToken) {
-      throw new Error(
-        "meta_access_token não configurado (ver tela de Integrações)"
-      );
-    }
-
     const uploaded = await storagePut(
       `posts/${post.filename}`,
       driveFile.buffer,

@@ -336,6 +336,37 @@ export async function setSetting(key: string, value: string) {
     .onDuplicateKeyUpdate({ set: { settingValue: value } });
 }
 
+/**
+ * Existence + last-updated metadata for a setting, without ever returning
+ * the value itself — used by status displays for secret settings (e.g. the
+ * Meta access token) that must never be echoed back to the client.
+ */
+export async function getSettingMeta(
+  key: string
+): Promise<{ isSet: boolean; updatedAt: Date | null }> {
+  const db = await getDb();
+  if (!db) return { isSet: false, updatedAt: null };
+  const rows = await db
+    .select({
+      settingValue: settings.settingValue,
+      updatedAt: settings.updatedAt,
+    })
+    .from(settings)
+    .where(eq(settings.settingKey, key))
+    .limit(1);
+  const row = rows[0];
+  return {
+    isSet: Boolean(row?.settingValue),
+    updatedAt: row?.settingValue ? row.updatedAt : null,
+  };
+}
+
+export async function deleteSetting(key: string) {
+  const db = await getDb();
+  if (!db) throw new Error("DB unavailable");
+  await db.delete(settings).where(eq(settings.settingKey, key));
+}
+
 /* ------------------------------------------------------------------ */
 /* Activity logs                                                      */
 /* ------------------------------------------------------------------ */

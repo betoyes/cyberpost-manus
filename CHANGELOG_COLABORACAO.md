@@ -30,6 +30,23 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-07-01] — Claude Code — Configuração de conta Instagram/Meta no painel (token + status + teste de conexão)
+
+- **Contexto:** investigação confirmou que a tabela `accounts` estava vazia em produção e que não existia nenhuma tela funcional para salvar `settings.meta_access_token` — a Integrations page só exibia o campo mascarado, sem forma de editá-lo. Esta entrada fecha esse gap.
+- **O que mudou:**
+  - `client/src/pages/Accounts.tsx`: nova seção "Conexão Meta" — campo de token (`type="password"`), botões **Salvar token** / **Remover token** / **Testar conexão Meta**, e card de status (conta padrão, IG User ID, token salvo, última atualização). O token nunca é reexibido depois de salvo.
+  - `server/routers/accounts.ts`: `metaStatus` (query — só booleans + data, nunca o token), `saveMetaToken`/`removeMetaToken` (mutations `ownerProcedure` — exigem `ctx.user.email === EMAIL_OWNER`), `testMetaConnection` (mutation somente-leitura, nunca publica).
+  - `server/_core/trpc.ts`: novo `ownerProcedure` — camada extra além de `adminProcedure`, especificamente para operações que tocam segredos de terceiros.
+  - `server/instagramGraph.ts`: nova `testInstagramConnection` — `GET` somente-leitura ao Graph API (`?fields=id,username`), nunca chama `/media`/`/media_publish`. Erros de rede retornam mensagem genérica fixa (não ecoam `error.message`, que em tese poderia embutir a URL com o token na query string).
+  - `server/executor.ts`: checagem de `meta_access_token` movida para **antes** do download do Drive (bloqueia publicação cedo quando falta token, evita chamada desnecessária ao Drive) — lógica de Drive/e-mail/cron em si não mudou, só a ordem das validações já existentes.
+  - `server/db.ts`: `getSettingMeta` (existência + `updatedAt`, nunca o valor) e `deleteSetting` — únicas adições.
+- **Segurança:** token nunca aparece em `console.log`/`console.error`/`console.warn` (grep confirmado), nunca em `activity_logs` (só texto fixo "Token do Meta atualizado/removido."), nunca na resposta de `metaStatus`. Campo do client é `type="password"`, `autoComplete="off"`, estado limpo após salvar. Corrigido durante a revisão: catch de erro de rede em `testInstagramConnection` retornava `error.message` cru (vetor de vazamento em tese, já que a URL testada carrega `access_token` na query string) — trocado por mensagem genérica fixa.
+- **Arquivos tocados:** `client/src/pages/Accounts.tsx`, `server/routers/accounts.ts`, `server/_core/trpc.ts`, `server/instagramGraph.ts`, `server/executor.ts`, `server/db.ts`.
+- **Migração de banco?** Não — usa a tabela `settings` já existente.
+- **Testado?** `server/routers/accounts.test.ts` (novo, 8 testes) + `server/instagramGraph.test.ts` (+3 testes) + `server/executor.test.ts` (+1 teste) — cobre: token nunca aparece em `metaStatus`; usuário não-owner não consegue salvar/remover; token vazio rejeitado; log de atividade sem o token; `testMetaConnection` nunca chama `publishImageToInstagram`; erro de rede não vaza o token/URL. Suíte completa: 103/103 passando. `tsc --noEmit` e `npm run build` sem erros.
+- **PENDENTE-DONO:** usar a nova tela `/accounts` para colar o token do Meta e testar a conexão — ver `INDEPENDENCIA_MANUS_STATUS.md` para o passo a passo completo de geração do token e do IG User ID.
+- **Branch / PR:** push direto na main.
+
 ### [2026-07-01] — Claude Code — Executor próprio (Drive + Instagram) + worker in-process — §2 + §5
 
 - **O que mudou (HANDOFF_INDEPENDENCIA_MANUS.md §2 + §5, combinados: o app agora roda no Railway, host always-on, então o disparo no horário e a publicação viram um único worker no próprio processo):**

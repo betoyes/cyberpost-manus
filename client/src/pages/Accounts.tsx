@@ -22,7 +22,15 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { trpc } from "@/lib/trpc";
 import { toast } from "sonner";
-import { Plus, Pencil, Trash2, Star } from "lucide-react";
+import {
+  Plus,
+  Pencil,
+  Trash2,
+  Star,
+  ShieldCheck,
+  ShieldAlert,
+  Eraser,
+} from "lucide-react";
 
 interface FormState {
   id?: number;
@@ -40,32 +48,95 @@ export default function Accounts() {
   const [form, setForm] = useState<FormState>(EMPTY);
 
   const createMut = trpc.accounts.create.useMutation({
-    onSuccess: () => { utils.accounts.list.invalidate(); toast.success("Conta criada"); setOpen(false); },
+    onSuccess: () => {
+      utils.accounts.list.invalidate();
+      toast.success("Conta criada");
+      setOpen(false);
+    },
     onError: e => toast.error(e.message),
   });
   const updateMut = trpc.accounts.update.useMutation({
-    onSuccess: () => { utils.accounts.list.invalidate(); toast.success("Conta atualizada"); setOpen(false); },
+    onSuccess: () => {
+      utils.accounts.list.invalidate();
+      toast.success("Conta atualizada");
+      setOpen(false);
+    },
     onError: e => toast.error(e.message),
   });
   const removeMut = trpc.accounts.remove.useMutation({
-    onSuccess: () => { utils.accounts.list.invalidate(); toast.success("Conta removida"); },
+    onSuccess: () => {
+      utils.accounts.list.invalidate();
+      toast.success("Conta removida");
+    },
     onError: e => toast.error(e.message),
   });
   const setDefaultMut = trpc.accounts.setDefault.useMutation({
-    onSuccess: () => { utils.accounts.list.invalidate(); toast.success("Conta padrão definida"); },
+    onSuccess: () => {
+      utils.accounts.list.invalidate();
+      toast.success("Conta padrão definida");
+    },
     onError: e => toast.error(e.message),
   });
 
   const list = accounts.data ?? [];
 
-  function openCreate() { setForm(EMPTY); setOpen(true); }
+  const metaStatus = trpc.accounts.metaStatus.useQuery();
+  const [metaToken, setMetaToken] = useState("");
+  const saveMetaTokenMut = trpc.accounts.saveMetaToken.useMutation({
+    onSuccess: () => {
+      utils.accounts.metaStatus.invalidate();
+      setMetaToken("");
+      toast.success("Token do Meta salvo");
+    },
+    onError: e => toast.error(e.message),
+  });
+  const removeMetaTokenMut = trpc.accounts.removeMetaToken.useMutation({
+    onSuccess: () => {
+      utils.accounts.metaStatus.invalidate();
+      toast.success("Token do Meta removido");
+    },
+    onError: e => toast.error(e.message),
+  });
+  const testMetaConnectionMut = trpc.accounts.testMetaConnection.useMutation({
+    onSuccess: result => {
+      if (result.ok) {
+        toast.success(
+          result.username ? `Conectado como @${result.username}` : "Conexão OK"
+        );
+      } else {
+        toast.error(result.message);
+      }
+    },
+    onError: e => toast.error(e.message),
+  });
+
+  function saveToken() {
+    if (!metaToken.trim()) {
+      toast.error("Cole o token antes de salvar");
+      return;
+    }
+    saveMetaTokenMut.mutate({ token: metaToken.trim() });
+  }
+
+  function openCreate() {
+    setForm(EMPTY);
+    setOpen(true);
+  }
   function openEdit(a: (typeof list)[number]) {
-    setForm({ id: a.id, name: a.name, handle: a.handle ?? "", igUserId: a.igUserId ?? "" });
+    setForm({
+      id: a.id,
+      name: a.name,
+      handle: a.handle ?? "",
+      igUserId: a.igUserId ?? "",
+    });
     setOpen(true);
   }
 
   function submit() {
-    if (!form.name.trim()) { toast.error("Informe o nome da conta"); return; }
+    if (!form.name.trim()) {
+      toast.error("Informe o nome da conta");
+      return;
+    }
     const payload = {
       name: form.name.trim(),
       handle: form.handle.trim() || undefined,
@@ -145,11 +216,17 @@ export default function Accounts() {
                       </TableCell>
                       <TableCell>
                         {a.active ? (
-                          <Badge variant="outline" className="text-green-600 border-green-600/30">
+                          <Badge
+                            variant="outline"
+                            className="text-green-600 border-green-600/30"
+                          >
                             Ativa
                           </Badge>
                         ) : (
-                          <Badge variant="outline" className="text-muted-foreground">
+                          <Badge
+                            variant="outline"
+                            className="text-muted-foreground"
+                          >
                             Inativa
                           </Badge>
                         )}
@@ -190,6 +267,92 @@ export default function Accounts() {
                 </TableBody>
               </Table>
             )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardContent className="space-y-4 p-6">
+            <div>
+              <h2 className="font-display text-lg font-semibold">
+                Conexão Meta
+              </h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Token de acesso do Instagram Graph API usado para publicar na
+                conta padrão. O token nunca é exibido depois de salvo.
+              </p>
+            </div>
+
+            <div className="grid gap-3 rounded-lg border p-4 sm:grid-cols-2">
+              <StatusRow
+                label="Conta padrão configurada"
+                ok={Boolean(metaStatus.data?.hasDefaultAccount)}
+              />
+              <StatusRow
+                label="IG User ID configurado"
+                ok={Boolean(metaStatus.data?.igUserIdConfigured)}
+              />
+              <StatusRow
+                label="Token salvo"
+                ok={Boolean(metaStatus.data?.tokenSaved)}
+              />
+              <div className="flex items-center justify-between gap-2 text-sm">
+                <span className="text-muted-foreground">
+                  Última atualização
+                </span>
+                <span className="font-mono text-xs">
+                  {metaStatus.data?.tokenUpdatedAt
+                    ? new Date(
+                        metaStatus.data.tokenUpdatedAt
+                      ).toLocaleDateString("pt-BR")
+                    : "—"}
+                </span>
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Meta Access Token</Label>
+              <div className="flex flex-col gap-2 sm:flex-row">
+                <Input
+                  type="password"
+                  autoComplete="off"
+                  placeholder={
+                    metaStatus.data?.tokenSaved
+                      ? "•••••••••••••••••• (salvo)"
+                      : "Cole o token de longa duração aqui"
+                  }
+                  value={metaToken}
+                  onChange={e => setMetaToken(e.target.value)}
+                />
+                <div className="flex gap-2">
+                  <Button
+                    onClick={saveToken}
+                    disabled={saveMetaTokenMut.isPending}
+                  >
+                    Salvar token
+                  </Button>
+                  <Button
+                    variant="outline"
+                    className="bg-card"
+                    disabled={
+                      !metaStatus.data?.tokenSaved ||
+                      removeMetaTokenMut.isPending
+                    }
+                    onClick={() => removeMetaTokenMut.mutate()}
+                  >
+                    <Eraser className="h-4 w-4" />
+                    Remover token
+                  </Button>
+                </div>
+              </div>
+            </div>
+
+            <Button
+              variant="secondary"
+              disabled={testMetaConnectionMut.isPending}
+              onClick={() => testMetaConnectionMut.mutate()}
+            >
+              Testar conexão Meta
+            </Button>
           </CardContent>
         </Card>
       </div>
@@ -236,7 +399,11 @@ export default function Accounts() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" className="bg-card" onClick={() => setOpen(false)}>
+            <Button
+              variant="outline"
+              className="bg-card"
+              onClick={() => setOpen(false)}
+            >
               Cancelar
             </Button>
             <Button
@@ -249,5 +416,22 @@ export default function Accounts() {
         </DialogContent>
       </Dialog>
     </DashboardLayout>
+  );
+}
+
+function StatusRow({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <div className="flex items-center justify-between gap-2 text-sm">
+      <span className="text-muted-foreground">{label}</span>
+      {ok ? (
+        <span className="flex items-center gap-1 text-green-600">
+          <ShieldCheck className="h-4 w-4" /> OK
+        </span>
+      ) : (
+        <span className="flex items-center gap-1 text-destructive">
+          <ShieldAlert className="h-4 w-4" /> Pendente
+        </span>
+      )}
+    </div>
   );
 }
