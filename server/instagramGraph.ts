@@ -17,7 +17,9 @@ async function graphPost(
     const message =
       (data?.error as { message?: string } | undefined)?.message ??
       response.statusText;
-    throw new Error(`Instagram Graph API error (${response.status}): ${message}`);
+    throw new Error(
+      `Instagram Graph API error (${response.status}): ${message}`
+    );
   }
   return data;
 }
@@ -41,7 +43,8 @@ export async function publishImageToInstagram(params: {
     access_token: accessToken,
   });
   const creationId = creation.id as string | undefined;
-  if (!creationId) throw new Error("Instagram media creation did not return an id");
+  if (!creationId)
+    throw new Error("Instagram media creation did not return an id");
 
   const published = await graphPost(`${igUserId}/media_publish`, {
     creation_id: creationId,

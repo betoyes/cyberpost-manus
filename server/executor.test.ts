@@ -65,8 +65,12 @@ const basePost = {
 describe("runExecutionForPost", () => {
   beforeEach(() => {
     vi.mocked(db.getPost).mockReset();
-    vi.mocked(db.updatePost).mockReset().mockResolvedValue(undefined as any);
-    vi.mocked(db.addLog).mockReset().mockResolvedValue(undefined as any);
+    vi.mocked(db.updatePost)
+      .mockReset()
+      .mockResolvedValue(undefined as any);
+    vi.mocked(db.addLog)
+      .mockReset()
+      .mockResolvedValue(undefined as any);
     vi.mocked(db.resolvePostAccount).mockReset();
     vi.mocked(db.getSetting).mockReset();
     vi.mocked(notifyOwner).mockReset().mockResolvedValue(true);

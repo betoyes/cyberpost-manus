@@ -218,15 +218,12 @@ class SDKServer {
       .sign(secretKey);
   }
 
-  async verifySession(cookieValue: string | undefined | null): Promise<
-    | {
-        openId: string;
-        appId: string;
-        name: string;
-        loginMethod?: string;
-      }
-    | null
-  > {
+  async verifySession(cookieValue: string | undefined | null): Promise<{
+    openId: string;
+    appId: string;
+    name: string;
+    loginMethod?: string;
+  } | null> {
     if (!cookieValue) {
       console.warn("[Auth] Missing session cookie");
       return null;

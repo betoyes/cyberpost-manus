@@ -19,7 +19,9 @@ vi.mock("../db", () => ({
 import * as db from "../db";
 
 const makeReq = (cookieValue: string): Request =>
-  ({ headers: { cookie: `${COOKIE_NAME}=${cookieValue}` } }) as unknown as Request;
+  ({
+    headers: { cookie: `${COOKIE_NAME}=${cookieValue}` },
+  }) as unknown as Request;
 
 describe("sdk session tokens (createSessionToken / verifySession)", () => {
   let sdk: typeof SdkInstance;

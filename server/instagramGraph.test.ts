@@ -12,8 +12,14 @@ describe("publishImageToInstagram", () => {
 
   it("creates, publishes, and fetches the permalink on success", async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "creation-1" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "media-1" }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "creation-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "media-1" }),
+      })
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ permalink: "https://instagram.com/p/xyz" }),
@@ -53,7 +59,10 @@ describe("publishImageToInstagram", () => {
 
   it("throws when media_publish fails", async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "creation-1" }) })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "creation-1" }),
+      })
       .mockResolvedValueOnce({
         ok: false,
         status: 500,
@@ -73,9 +82,20 @@ describe("publishImageToInstagram", () => {
 
   it("still returns the mediaId when the permalink fetch fails", async () => {
     mockFetch
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "creation-1" }) })
-      .mockResolvedValueOnce({ ok: true, json: async () => ({ id: "media-1" }) })
-      .mockResolvedValueOnce({ ok: false, status: 500, statusText: "err", json: async () => ({}) });
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "creation-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ id: "media-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: false,
+        status: 500,
+        statusText: "err",
+        json: async () => ({}),
+      });
 
     const result = await publishImageToInstagram({
       igUserId: "ig-1",
