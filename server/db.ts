@@ -7,6 +7,7 @@ import {
   settings,
   activityLogs,
   accounts,
+  type Post,
   type InsertPost,
   type InsertActivityLog,
   type InsertAccount,
@@ -231,6 +232,49 @@ export async function getDefaultAccount() {
     .where(eq(accounts.isDefault, true))
     .limit(1);
   return rows[0];
+}
+
+export type ResolvedAccount = {
+  id: number;
+  name: string;
+  handle: string | null;
+  igUserId: string | null;
+};
+
+/**
+ * Resolve which Instagram account a post publishes to: post.accountId if
+ * set, otherwise the default account. Wrapped so callers keep working if the
+ * accounts table hasn't been migrated yet. Shared by queueNextHandler
+ * (Manus executor bridge) and the own executor (HANDOFF_INDEPENDENCIA_MANUS.md §2).
+ */
+export async function resolvePostAccount(
+  post: Pick<Post, "accountId">
+): Promise<ResolvedAccount | null> {
+  try {
+    if (post.accountId) {
+      const acc = await getAccount(post.accountId);
+      if (acc) {
+        return {
+          id: acc.id,
+          name: acc.name,
+          handle: acc.handle ?? null,
+          igUserId: acc.igUserId ?? null,
+        };
+      }
+    }
+    const def = await getDefaultAccount();
+    if (def) {
+      return {
+        id: def.id,
+        name: def.name,
+        handle: def.handle ?? null,
+        igUserId: def.igUserId ?? null,
+      };
+    }
+  } catch {
+    // accounts table not yet migrated — continue without account info
+  }
+  return null;
 }
 
 export async function createAccount(data: InsertAccount) {

@@ -17,6 +17,7 @@ import {
 } from "../queueApi";
 import { runPostHandler } from "../schedulePost";
 import { approvalGetHandler } from "../approvalHandler";
+import { startExecutorWorker } from "../executorWorker";
 
 function isPortAvailable(port: number): Promise<boolean> {
   return new Promise(resolve => {
@@ -72,6 +73,9 @@ async function startServer() {
   } else {
     serveStatic(app);
   }
+
+  // Own executor + cron worker (replaces the Manus Python executor + Heartbeat).
+  startExecutorWorker();
 
   const preferredPort = parseInt(process.env.PORT || "3000");
   const port = await findAvailablePort(preferredPort);

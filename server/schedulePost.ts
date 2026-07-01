@@ -67,6 +67,77 @@ export async function cancelPostJob(
   }
 }
 
+export type AiApprovalFlowResult =
+  | { action: "halted-no-theme" }
+  | { action: "awaiting-approval" };
+
+/**
+ * Rule 3 (spec §1): IA mode without a manual caption — generate the AI
+ * caption inline, mark the post "Aguardando Aprovação", and email the owner
+ * approve/reject links. Shared by the legacy Manus Heartbeat path
+ * (runPostHandler below) and the own executor worker
+ * (HANDOFF_INDEPENDENCIA_MANUS.md §2/§5).
+ */
+export async function triggerAiApprovalFlow(
+  post: NonNullable<Awaited<ReturnType<typeof db.getPost>>>
+): Promise<AiApprovalFlowResult> {
+  const theme = (post.theme ?? "").trim();
+
+  if (!theme) {
+    await db.updatePost(post.id, {
+      status: "Fluxo Parado",
+      note: "Horário agendado atingido sem tema para geração de legenda de IA.",
+    });
+    await db.addLog({
+      postId: post.id,
+      kind: "warning",
+      message: `Horário agendado atingido para "${post.filename}": sem tema — fluxo parado.`,
+    });
+    await notifyOwner({
+      title: "CybersecCAST: post sem tema",
+      content: `"${post.filename}" chegou ao horário agendado sem tema configurado. Fluxo parado — edite o post.`,
+    });
+    return { action: "halted-no-theme" };
+  }
+
+  const caption = await generateCaption(theme);
+  const approvalToken = randomBytes(32).toString("hex");
+  const approvalEmailSentAt = Date.now();
+
+  await db.updatePost(post.id, {
+    captionAi: caption,
+    status: "Aguardando Aprovação",
+    captionApproved: false,
+    approvalToken,
+    approvalEmailSentAt,
+  });
+  await db.addLog({
+    postId: post.id,
+    kind: "ia",
+    message: `Horário agendado atingido: legenda de IA gerada para "${post.filename}". Aguardando aprovação por link.`,
+  });
+
+  const base = ENV.publicBaseUrl;
+  const approveUrl = `${base}/aprovacao/confirmar?postId=${post.id}&token=${approvalToken}&decision=approve`;
+  const rejectUrl = `${base}/aprovacao/confirmar?postId=${post.id}&token=${approvalToken}&decision=reject`;
+
+  await notifyOwner({
+    title: `CybersecCAST: legenda gerada — "${post.filename}"`,
+    content: `Post: ${post.filename}
+Tema: ${post.theme ?? "(sem tema)"}
+
+Legenda sugerida pela IA:
+${caption}
+
+Para decidir, clique:
+APROVAR  -> ${approveUrl}
+REPROVAR -> ${rejectUrl}
+
+(Se preferir, edite a legenda manual no painel e o post voltará à fila automaticamente.)`,
+  });
+  return { action: "awaiting-approval" };
+}
+
 /**
  * POST /api/scheduled/runPost
  *
@@ -105,61 +176,8 @@ export async function runPostHandler(req: Request, res: Response) {
 
     // Rule 3: IA mode without manual caption — generate caption, await approval
     if (isAiMode && !hasManualCaption) {
-      const theme = (post.theme ?? "").trim();
-
-      if (!theme) {
-        await db.updatePost(post.id, {
-          status: "Fluxo Parado",
-          note: "Horário agendado atingido sem tema para geração de legenda de IA.",
-        });
-        await db.addLog({
-          postId: post.id,
-          kind: "warning",
-          message: `Horário agendado atingido para "${post.filename}": sem tema — fluxo parado.`,
-        });
-        await notifyOwner({
-          title: "CybersecCAST: post sem tema",
-          content: `"${post.filename}" chegou ao horário agendado sem tema configurado. Fluxo parado — edite o post.`,
-        });
-        return res.json({ ok: true, action: "halted-no-theme" });
-      }
-
-      const caption = await generateCaption(theme);
-      const approvalToken = randomBytes(32).toString("hex");
-      const approvalEmailSentAt = Date.now();
-
-      await db.updatePost(post.id, {
-        captionAi: caption,
-        status: "Aguardando Aprovação",
-        captionApproved: false,
-        approvalToken,
-        approvalEmailSentAt,
-      });
-      await db.addLog({
-        postId: post.id,
-        kind: "ia",
-        message: `Horário agendado atingido: legenda de IA gerada para "${post.filename}". Aguardando aprovação por link.`,
-      });
-
-      const base = ENV.publicBaseUrl;
-      const approveUrl = `${base}/aprovacao/confirmar?postId=${post.id}&token=${approvalToken}&decision=approve`;
-      const rejectUrl = `${base}/aprovacao/confirmar?postId=${post.id}&token=${approvalToken}&decision=reject`;
-
-      await notifyOwner({
-        title: `CybersecCAST: legenda gerada — "${post.filename}"`,
-        content: `Post: ${post.filename}
-Tema: ${post.theme ?? "(sem tema)"}
-
-Legenda sugerida pela IA:
-${caption}
-
-Para decidir, clique:
-APROVAR  -> ${approveUrl}
-REPROVAR -> ${rejectUrl}
-
-(Se preferir, edite a legenda manual no painel e o post voltará à fila automaticamente.)`,
-      });
-      return res.json({ ok: true, action: "awaiting-approval" });
+      const result = await triggerAiApprovalFlow(post);
+      return res.json({ ok: true, ...result });
     }
 
     // Rules 1+2: manual caption present or manual mode — executor handles Drive + Instagram

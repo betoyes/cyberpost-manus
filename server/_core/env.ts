@@ -7,9 +7,13 @@ export const ENV = {
   isProduction: process.env.NODE_ENV === "production",
   forgeApiUrl: process.env.BUILT_IN_FORGE_API_URL ?? "",
   forgeApiKey: process.env.BUILT_IN_FORGE_API_KEY ?? "",
-  // Base URL for approval links sent by email (e.g. https://cyberpost.manus.space).
+  // Base URL for approval links sent by email (e.g. https://cyberpost.manus.space)
+  // and for public image URLs handed to the Instagram Graph API (§2).
   // PENDENTE-MANUS: set PUBLIC_BASE_URL in production environment.
-  publicBaseUrl: process.env.PUBLIC_BASE_URL ?? "",
+  // Getter so tests can set process.env after module load (same pattern as queueApiToken).
+  get publicBaseUrl() {
+    return process.env.PUBLIC_BASE_URL ?? "";
+  },
   // Own LLM provider (replaces Manus Forge API — HANDOFF_INDEPENDENCIA_MANUS.md §4).
   // Getters so tests can set process.env after module load (same pattern as queueApiToken).
   get openaiApiKey() {
@@ -44,5 +48,13 @@ export const ENV = {
   // Getter so tests can set process.env.QUEUE_API_TOKEN after module load.
   get queueApiToken() {
     return process.env.QUEUE_API_TOKEN ?? "";
+  },
+  // Own executor (Google Drive read + Instagram publish) — replaces the Manus
+  // Python executor script. HANDOFF_INDEPENDENCIA_MANUS.md §2.
+  get googleServiceAccountJson() {
+    return process.env.GOOGLE_SA_JSON ?? "";
+  },
+  get driveFolderId() {
+    return process.env.DRIVE_FOLDER_ID ?? "";
   },
 };

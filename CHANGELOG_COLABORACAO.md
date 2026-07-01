@@ -30,6 +30,28 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-07-01] — Claude Code — Executor próprio (Drive + Instagram) + worker in-process — §2 + §5
+
+- **O que mudou (HANDOFF_INDEPENDENCIA_MANUS.md §2 + §5, combinados: o app agora roda no Railway, host always-on, então o disparo no horário e a publicação viram um único worker no próprio processo):**
+  - `server/googleDrive.ts` (novo): `downloadDriveImage({ filename, folderId })` via Service Account (`google-auth-library`'s `JWT`, já instalada) + chamadas REST diretas à Drive API v3 (`files.list` + `files.get?alt=media`) — sem adicionar o pacote `googleapis` inteiro.
+  - `server/instagramGraph.ts` (novo): `publishImageToInstagram({ igUserId, imageUrl, caption, accessToken })` — as 3 chamadas do Graph API (`/media` → `/media_publish` → `GET /{id}?fields=permalink`) via `fetch`.
+  - `server/executor.ts` (novo): `runExecutionForPost(postId)` — aplica as 3 regras do dono num só lugar. Reaproveita `resolveCaption` (`engine.ts`), `resolvePostAccount` (novo helper em `db.ts`, extraído do bloco que já existia em `queueNextHandler`) e `triggerAiApprovalFlow` (novo helper em `schedulePost.ts`, extraído da Regra 3 que já existia em `runPostHandler`) — zero duplicação de lógica entre o caminho legado (Manus) e o novo.
+  - `server/executorWorker.ts` (novo): `startExecutorWorker()` — `setInterval` de 60s com guarda `isTicking` (evita sobreposição), chama `db.getNextReadyToExecute` (já existia) + `runExecutionForPost`. Hookado em `server/_core/index.ts` no boot do servidor.
+  - `server/_core/env.ts`: novas chaves `googleServiceAccountJson` (`GOOGLE_SA_JSON`), `driveFolderId` (`DRIVE_FOLDER_ID`). `publicBaseUrl` virou getter (era propriedade estática — bug de testabilidade pego pelos testes novos, mesma causa dos bugs de `appId`/`cookieSecret` corrigidos antes; sem mudança de comportamento em produção).
+  - **Reaproveitado, sem segredo novo:** `meta_access_token` + `accounts.igUserId` já existiam em `settings`/`accounts` (tela de Integrações/Contas) — o executor novo lê de lá, não precisa de env var nova pro token do Meta.
+- **O que NÃO mudou (risco controlado, decisão junto com o dono):** `server/storage.ts` continua no Forge da Manus (fora de escopo desta rodada); `server/queueApi.ts` (`/api/queue/*`) e o `runPostHandler`/Heartbeat legado **ficam intocados no código** — idempotente, não quebra nada se o executor Python/Heartbeat da Manus continuar rodando por engano; o dono desativa manualmente do lado da Manus depois de confirmar que o worker novo funciona.
+- **Arquivos tocados:** `server/googleDrive.ts`, `server/instagramGraph.ts`, `server/executor.ts`, `server/executorWorker.ts` (novos); `server/_core/env.ts`, `server/_core/index.ts`, `server/db.ts` (`resolvePostAccount` extraído), `server/queueApi.ts` (usa o helper extraído), `server/schedulePost.ts` (`triggerAiApprovalFlow` extraído).
+- **Migração de banco?** Não — todos os campos usados já existem no schema atual.
+- **Testado?** `server/googleDrive.test.ts`, `server/instagramGraph.test.ts`, `server/executor.test.ts`, `server/executorWorker.test.ts` — 19 testes novos, cobrindo: SA não configurada, arquivo não encontrado no Drive, download OK, falha de rede/API em cada etapa do Graph API, halt sem Regra 3 (bug real pego e corrigido: a ordem original checava `resolveCaption` antes da Regra 3 e nunca disparava geração de legenda de IA pra post novo), conta ausente, imagem ausente, publicação com sucesso, erro → Fluxo Parado, guarda de sobreposição do worker. Suíte completa: 91/91 passando. `tsc --noEmit` e `npm run build` (mesmo comando do Railway) sem erros.
+- **PENDENTE-DONO (não dá pra testar publicação real sem isso):**
+  1. Google Cloud → IAM → Service Accounts → criar uma nova, habilitar a Drive API no projeto, baixar a chave JSON.
+  2. Compartilhar a pasta `CybersecCAST` do Drive com o e-mail da service account (`xxx@xxx.iam.gserviceaccount.com`).
+  3. Pegar o ID da pasta (não o nome) na URL do Drive.
+  4. Configurar no Railway: `GOOGLE_SA_JSON` (o JSON inteiro da chave) e `DRIVE_FOLDER_ID`.
+  5. Conferir que `meta_access_token` (long-lived, permissão `instagram_content_publish`) e a conta em `/accounts` (`igUserId`) estão preenchidos — já existiam antes, não são segredos novos.
+  6. Depois do deploy, criar um post de teste com legenda manual + imagem real no Drive e confirmar que publica e vira "Postado" no painel.
+- **Branch / PR:** push direto na main.
+
 ### [2026-06-30] — Claude Code — Fix: login Google entrava em loop por sync legado da Manus
 
 - **Contexto:** depois do fix de `appId` vazio (commit `7b1f899`), o login Google concluía e a sessão JWT passava na validação, mas o app entrava em loop de login. Logs do Railway mostravam `[Auth] Failed to sync user from OAuth: Error: User openId is required for upsert`, originado em `upsertUser` ← `SDKServer.authenticateRequest` ← `createContext`.
