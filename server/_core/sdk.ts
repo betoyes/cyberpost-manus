@@ -24,6 +24,11 @@ export type SessionPayload = {
   name: string;
 };
 
+// Fallback appId claim for session JWTs when ENV.appId (VITE_APP_ID, the
+// Manus OAuth portal project id) is not configured — e.g. after the §6B
+// Google login migration, where this app no longer depends on Manus OAuth.
+const SESSION_APP_ID = "cyberseccast-autopost";
+
 const EXCHANGE_TOKEN_PATH = `/webdev.v1.WebDevAuthPublicService/ExchangeToken`;
 const GET_USER_INFO_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfo`;
 const GET_USER_INFO_WITH_JWT_PATH = `/webdev.v1.WebDevAuthPublicService/GetUserInfoWithJwt`;
@@ -160,7 +165,8 @@ class SDKServer {
   }
 
   /**
-   * Create a session token for a Manus user openId
+   * Create a session token for an authenticated user's openId (Manus openId,
+   * or a Google `sub` since the §6B login migration).
    * @example
    * const sessionToken = await sdk.createSessionToken(userInfo.openId);
    */
@@ -171,7 +177,12 @@ class SDKServer {
     return this.signSession(
       {
         openId,
-        appId: ENV.appId,
+        // ENV.appId (VITE_APP_ID) was only ever set by the Manus OAuth portal
+        // and is empty after the §6B Google login migration. verifySession
+        // requires a non-empty appId claim, so fall back to a fixed own-app
+        // identifier instead of signing an empty string that would always
+        // fail validation.
+        appId: ENV.appId || SESSION_APP_ID,
         name: options.name || "",
       },
       options

@@ -30,6 +30,16 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Fix: sessão do login Google rejeitada ("Session payload missing required fields")
+
+- **Contexto:** depois do fix de `invalid_client` (commit `1f94d6b`), o callback do Google passou a completar sem erro, mas todo request autenticado subsequente falhava com `[Auth] Session payload missing required fields` nos logs do Railway — o usuário nunca ficava de fato logado.
+- **Causa raiz:** `server/_core/sdk.ts` — `createSessionToken` assina o JWT de sessão com `appId: ENV.appId`, e `ENV.appId = process.env.VITE_APP_ID ?? ""`. `VITE_APP_ID` era a identificação do projeto no portal OAuth da Manus; não é mais setada (nem deveria ser) depois da migração para login Google (§6B). Resultado: o token era assinado com `appId: ""`. `verifySession` exige `isNonEmptyString(appId)` — string vazia falha essa checagem e a sessão é descartada, mesmo sendo um token recém-emitido e válido.
+- **O que mudou:** `server/_core/sdk.ts` — `createSessionToken` agora assina `appId: ENV.appId || SESSION_APP_ID`, onde `SESSION_APP_ID = "cyberseccast-autopost"` é um identificador fixo e sempre não vazio, próprio do app (não depende mais de configuração externa da Manus). Se `VITE_APP_ID` estiver configurada (ex.: algum ambiente legado), ela continua sendo usada — o fallback só entra quando está vazia. **A validação em `verifySession` não foi alterada nem enfraquecida** — continua exigindo `openId`, `appId` e `name` não vazios; a correção foi garantir que a criação da sessão sempre produza um payload que passa nessa validação.
+- **Arquivos tocados:** `server/_core/sdk.ts`.
+- **Migração de banco?** Não.
+- **Testado?** Novo `server/_core/sdk.test.ts` (2 testes) — cobre exatamente o cenário do bug: cria sessão com `VITE_APP_ID` ausente e confirma que `verifySession` aceita o token (`appId` não vazio, `openId`/`name` corretos); e confirma que `verifySession` continua rejeitando cookie ausente. Suíte completa: 69/69 passando. `tsc --noEmit` sem erros. `npm run build` (mesmo comando do Railway) compila sem erros.
+- **Branch / PR:** push direto na main.
+
 ### [2026-06-30] — Claude Code — Fix: invalid_client no login Google (Railway) — normalização + diagnóstico
 
 - **Contexto:** login Google (§6B) publicado no commit `5b5b4ef` falhava em produção no Railway com `GaxiosError: invalid_client` no `client.getToken(code)`, mesmo após o dono confirmar `GOOGLE_CLIENT_ID`/`VITE_GOOGLE_CLIENT_ID` idênticos, `GOOGLE_CLIENT_SECRET` recriado e redeployado, tipo de OAuth Client "Web application" e redirect URI cadastrado corretamente.
