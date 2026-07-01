@@ -89,6 +89,36 @@ Modelo mínimo:
 - **Risco assumido conscientemente:** login agora depende do Google em vez da Manus — troca uma dependência de terceiro por outra, mas o Google é padrão de mercado e não tem relação com a plataforma Manus, então conta como independência real para o objetivo do dono.
 - **Branch / PR:** push direto na main.
 
+### [2026-06-30] — Claude Code — E-mail próprio (Resend) — independência §3
+
+- **O que mudou (HANDOFF_INDEPENDENCIA_MANUS.md §3, item 2/7 da ordem de migração):**
+  - Novo `server/email.ts`: `sendEmail({ to, subject, html, text })` via SDK `resend`. Cliente lazy/cacheado; retorna `false` (não lança) em falha de entrega.
+  - `server/_core/notification.ts`: `notifyOwner({title, content})` manteve **a mesma assinatura pública** (todos os call sites — `schedulePost.ts`, `queueApi.ts`, `approvalHandler.ts`, `_core/systemRouter.ts` — não precisaram mudar), mas o transporte interno trocou do Manus Notification Service (Forge) para `sendEmail`. Removida `buildEndpointUrl` (Forge, morta). Destinatário resolvido por `settings.approval_email` → fallback `EMAIL_OWNER`; se nenhum estiver configurado, lança `TRPCError`. Conteúdo vai como texto puro (`text`) e como HTML escapado em `<pre>` (`html`) para evitar quebra de marcação.
+  - `server/_core/env.ts`: novas chaves `resendApiKey`, `emailFrom`, `emailOwner` (getters, mesmo padrão de `queueApiToken`, para permitir override em testes).
+- **Arquivos tocados:** `server/email.ts` (novo), `server/_core/notification.ts`, `server/_core/env.ts`.
+- **Migração de banco?** Não.
+- **Testado?** `server/email.test.ts` (5 testes) + `server/_core/notification.test.ts` (6 testes) — cobre: faltar `RESEND_API_KEY`/`EMAIL_FROM`, envio OK, erro do provedor, exceção de rede, prioridade `approval_email` > `EMAIL_OWNER`, ausência total de destinatário, escape de HTML. Suíte completa: `./node_modules/.bin/vitest run` — 61/61 passando. `tsc --noEmit` sem erros.
+- **PENDENTE-DONO:** gerar `RESEND_API_KEY` (resend.com) e configurar `EMAIL_FROM` (domínio verificado no Resend) e, se não usar a tela de configurações para `approval_email`, `EMAIL_OWNER` — ver lista completa de segredos no final desta entrada e na próxima.
+- **Branch / PR:** ainda não commitado — pendente de push (ver entrada de login acima, que foi commitada isoladamente a pedido do dono).
+
+### [2026-06-30] — Claude Code — LLM próprio (OpenAI) — independência §4
+
+- **O que mudou (HANDOFF_INDEPENDENCIA_MANUS.md §4, item 1/7 da ordem de migração):**
+  - Novo `server/llm.ts`: `chatComplete({ system, user, model, jsonSchema })` via SDK `openai`, com suporte a `response_format: json_schema` (mesmo contrato usado pela geração de legenda). Cliente lazy/cacheado.
+  - `server/caption.ts` (`generateCaption`): trocou `invokeLLM` (Forge, `server/_core/llm.ts`) por `chatComplete`. Assinatura pública de `generateCaption(theme)` inalterada — `schedulePost.ts`, `queueApi.ts`, `engine.ts` não precisaram mudar. Removido `DEFAULT_MODEL` hardcoded — default agora vem de `ENV.llmModel` (`LLM_MODEL`, padrão `gpt-4o-mini`) dentro de `chatComplete`; `settings.llm_model` continua tendo prioridade quando configurado.
+  - `server/_core/env.ts`: novas chaves `openaiApiKey`, `llmModel` (getters).
+  - `server/_core/llm.ts` (Forge) **não foi alterado nem removido** — ficou sem uso (só era consumido por `caption.ts`); decisão de remover fica para depois de confirmar que nada mais depende dele.
+- **Arquivos tocados:** `server/llm.ts` (novo), `server/caption.ts`, `server/_core/env.ts`.
+- **Migração de banco?** Não.
+- **Testado?** `server/llm.test.ts` (5 testes) + `server/caption.test.ts` (4 testes) — cobre: falta de `OPENAI_API_KEY`, mensagens system/user corretas, override de model, `response_format` json_schema estrito, conteúdo vazio, parsing de JSON/fallback para texto cru. Suíte completa: 61/61 passando.
+- **PENDENTE-DONO:** gerar `OPENAI_API_KEY` (platform.openai.com) — ver lista completa de segredos abaixo.
+- **Segredos a gerar (§8 do handoff, cobertos por estas duas entradas):**
+  - `OPENAI_API_KEY` — geração de legenda de IA.
+  - `RESEND_API_KEY` + `EMAIL_FROM` (domínio verificado no Resend) — envio de e-mail (notificações + aprovação por link).
+  - Opcional: `LLM_MODEL` (default `gpt-4o-mini`) e `EMAIL_OWNER` (fallback de destinatário; pode usar `settings.approval_email` no painel em vez disso).
+  - Ainda **não** geramos/usamos `GOOGLE_SA_JSON`, `DRIVE_FOLDER_ID`, `META_IG_ACCESS_TOKEN` — esses são do §2 (executor Node), próxima etapa da ordem combinada com o dono.
+- **Branch / PR:** ainda não commitado — pendente de push.
+
 ### [2026-06-30] — Claude Code — Aprovação de legenda por link no e-mail (Opção B1)
 
 - **O que mudou:**

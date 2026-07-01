@@ -10,8 +10,24 @@ export const ENV = {
   // Base URL for approval links sent by email (e.g. https://cyberpost.manus.space).
   // PENDENTE-MANUS: set PUBLIC_BASE_URL in production environment.
   publicBaseUrl: process.env.PUBLIC_BASE_URL ?? "",
-  // Only email allowed to log in (HANDOFF_INDEPENDENCIA_MANUS.md §6B — own Google
-  // login, single-owner app). Getter so tests can set process.env after module load.
+  // Own LLM provider (replaces Manus Forge API — HANDOFF_INDEPENDENCIA_MANUS.md §4).
+  // Getters so tests can set process.env after module load (same pattern as queueApiToken).
+  get openaiApiKey() {
+    return process.env.OPENAI_API_KEY ?? "";
+  },
+  get llmModel() {
+    return process.env.LLM_MODEL ?? "gpt-4o-mini";
+  },
+  // Own transactional email provider (replaces Manus Notification Service — §3).
+  get resendApiKey() {
+    return process.env.RESEND_API_KEY ?? "";
+  },
+  get emailFrom() {
+    return process.env.EMAIL_FROM ?? "";
+  },
+  // Fallback recipient when settings.approval_email is not configured.
+  // Also doubles as the only email allowed to log in (HANDOFF_INDEPENDENCIA_MANUS.md §6B —
+  // own Google login, single-owner app).
   get emailOwner() {
     return process.env.EMAIL_OWNER ?? "";
   },
