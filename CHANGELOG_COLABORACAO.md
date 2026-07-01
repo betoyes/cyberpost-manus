@@ -30,6 +30,30 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-06-30] — Claude Code — Login próprio (Google Sign-In) — independência §6B
+
+- **O que mudou (HANDOFF_INDEPENDENCIA_MANUS.md §6B — decisão tomada com o dono: trocar auth próprio desde já, antes de mexer em §6/hospedagem):**
+  - Descoberta importante ao investigar: a sessão (`server/_core/sdk.ts` — `createSessionToken`/`verifySession`) já era um **JWT próprio** assinado com `JWT_SECRET` (lib `jose`), 100% independente da Manus. Só o **login inicial** dependia do portal OAuth da Manus. Escopo da mudança ficou menor que o handoff estimava.
+  - `server/_core/oauth.ts` (`/api/oauth/callback`): trocou `sdk.exchangeCodeForToken`/`sdk.getUserInfo` (Manus) por `OAuth2Client` da lib `google-auth-library` — troca o `code` por tokens do Google, valida o `id_token` (`verifyIdToken`), extrai `sub`/`email`/`name`.
+  - **Login restrito ao dono:** como 100% das rotas tRPC do app já usam `adminProcedure` (confirmado por grep — não existe uso real de papel "user"), o callback **rejeita com 403 qualquer e-mail Google diferente de `EMAIL_OWNER`**, antes de criar sessão ou tocar no banco. O e-mail do dono sempre vira `role: "admin"` diretamente (sem depender mais de `OWNER_OPEN_ID`/Manus openId).
+  - `client/src/const.ts` (`getLoginUrl`): trocou a URL do portal da Manus (`VITE_OAUTH_PORTAL_URL` + `VITE_APP_ID`) pela URL padrão de autorização do Google (`accounts.google.com/o/oauth2/v2/auth`) com `VITE_GOOGLE_CLIENT_ID`. Fluxo de redirect/state inalterado (mesmo `btoa`/`atob` de antes).
+  - `server/_core/env.ts`: novas chaves `googleClientId`, `googleClientSecret` (getters). `emailOwner` (já criado para §3) agora também é o **gate de quem pode logar**.
+  - **Não tocado:** `server/_core/sdk.ts` (sessão JWT, `authenticateRequest`, inclusive o branch `CRON_OPEN_ID_PREFIX` usado pelo Heartbeat da Manus — ainda necessário até §5/§2 serem migrados), `server/db.ts` (`upsertUser` já aceitava `role` explícito, nenhuma mudança necessária).
+- **Arquivos tocados:** `server/_core/oauth.ts`, `server/_core/env.ts`, `client/src/const.ts`.
+- **Migração de banco?** Não.
+- **Testado?** `server/_core/oauth.test.ts` (6 testes novos) — cobre: `code`/`state` ausentes, Google não configurado, rejeição de e-mail não-dono (sem tocar `db.upsertUser` nem criar sessão), criação de sessão admin para o dono, `id_token` ausente na resposta do Google, e-mail do dono case-insensitive. Suíte completa: 67/67 passando. `tsc --noEmit` sem erros.
+- **PENDENTE-DONO (setup manual no Google Cloud Console, fora do alcance do Claude):**
+  1. Criar um projeto (ou usar um existente) em https://console.cloud.google.com/.
+  2. "APIs & Services" → "Credentials" → "Create OAuth client ID" → tipo **Web application**.
+  3. Em **Authorized redirect URIs**, adicionar `https://<seu-domínio-de-produção>/api/oauth/callback` (e `http://localhost:5173/api/oauth/callback` se for testar local).
+  4. Copiar **Client ID** e **Client secret** gerados.
+- **Segredos a gerar/configurar:**
+  - `GOOGLE_CLIENT_ID` + `GOOGLE_CLIENT_SECRET` (servidor) — do passo acima.
+  - `VITE_GOOGLE_CLIENT_ID` (build do client/Vite) — **mesmo valor** do `GOOGLE_CLIENT_ID` (é público, vai no bundle do navegador; o secret nunca vai pro client).
+  - `EMAIL_OWNER` — já configurado (reaproveitado de §3); é o único e-mail Google que pode logar.
+- **Risco assumido conscientemente:** login agora depende do Google em vez da Manus — troca uma dependência de terceiro por outra, mas o Google é padrão de mercado e não tem relação com a plataforma Manus, então conta como independência real para o objetivo do dono.
+- **Branch / PR:** push direto na main.
+
 ### [2026-06-30] — Claude Code — Aprovação de legenda por link no e-mail (Opção B1)
 
 - **O que mudou:**

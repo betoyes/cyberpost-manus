@@ -10,6 +10,18 @@ export const ENV = {
   // Base URL for approval links sent by email (e.g. https://cyberpost.manus.space).
   // PENDENTE-MANUS: set PUBLIC_BASE_URL in production environment.
   publicBaseUrl: process.env.PUBLIC_BASE_URL ?? "",
+  // Only email allowed to log in (HANDOFF_INDEPENDENCIA_MANUS.md §6B — own Google
+  // login, single-owner app). Getter so tests can set process.env after module load.
+  get emailOwner() {
+    return process.env.EMAIL_OWNER ?? "";
+  },
+  // Own login provider (Google Sign-In). Replaces the Manus OAuth portal — §6B.
+  get googleClientId() {
+    return process.env.GOOGLE_CLIENT_ID ?? "";
+  },
+  get googleClientSecret() {
+    return process.env.GOOGLE_CLIENT_SECRET ?? "";
+  },
   // Shared secret token to authenticate the execution-queue API used by the Manus executor.
   // Getter so tests can set process.env.QUEUE_API_TOKEN after module load.
   get queueApiToken() {

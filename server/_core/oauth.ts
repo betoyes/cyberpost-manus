@@ -1,14 +1,22 @@
 import { COOKIE_NAME, ONE_YEAR_MS } from "@shared/const";
 import type { Express, Request, Response } from "express";
+import { OAuth2Client } from "google-auth-library";
 import * as db from "../db";
 import { getSessionCookieOptions } from "./cookies";
 import { sdk } from "./sdk";
+import { ENV } from "./env";
 
 function getQueryParam(req: Request, key: string): string | undefined {
   const value = req.query[key];
   return typeof value === "string" ? value : undefined;
 }
 
+/**
+ * Own login provider: Google Sign-In. Replaces the Manus OAuth portal —
+ * HANDOFF_INDEPENDENCIA_MANUS.md §6B. This app has a single owner/admin, so
+ * login is hard-restricted to ENV.emailOwner; any other Google account is
+ * rejected before a session is ever created.
+ */
 export function registerOAuthRoutes(app: Express) {
   app.get("/api/oauth/callback", async (req: Request, res: Response) => {
     const code = getQueryParam(req, "code");
@@ -19,34 +27,72 @@ export function registerOAuthRoutes(app: Express) {
       return;
     }
 
-    try {
-      const tokenResponse = await sdk.exchangeCodeForToken(code, state);
-      const userInfo = await sdk.getUserInfo(tokenResponse.accessToken);
+    if (!ENV.googleClientId || !ENV.googleClientSecret) {
+      res.status(500).json({ error: "Google OAuth is not configured" });
+      return;
+    }
 
-      if (!userInfo.openId) {
-        res.status(400).json({ error: "openId missing from user info" });
+    try {
+      const redirectUri = atob(state);
+      const client = new OAuth2Client({
+        clientId: ENV.googleClientId,
+        clientSecret: ENV.googleClientSecret,
+        redirectUri,
+      });
+
+      const { tokens } = await client.getToken(code);
+      if (!tokens.id_token) {
+        res.status(400).json({ error: "Google did not return an id_token" });
+        return;
+      }
+
+      const ticket = await client.verifyIdToken({
+        idToken: tokens.id_token,
+        audience: ENV.googleClientId,
+      });
+      const payload = ticket.getPayload();
+
+      if (!payload?.sub || !payload.email) {
+        res.status(400).json({ error: "Google profile missing sub/email" });
+        return;
+      }
+
+      if (
+        !ENV.emailOwner ||
+        payload.email.toLowerCase() !== ENV.emailOwner.toLowerCase()
+      ) {
+        console.warn(
+          `[OAuth] Rejected Google login from non-owner email: ${payload.email}`
+        );
+        res
+          .status(403)
+          .json({ error: "Conta não autorizada para este painel" });
         return;
       }
 
       await db.upsertUser({
-        openId: userInfo.openId,
-        name: userInfo.name || null,
-        email: userInfo.email ?? null,
-        loginMethod: userInfo.loginMethod ?? userInfo.platform ?? null,
+        openId: payload.sub,
+        name: payload.name || null,
+        email: payload.email,
+        loginMethod: "google",
         lastSignedIn: new Date(),
+        role: "admin",
       });
 
-      const sessionToken = await sdk.createSessionToken(userInfo.openId, {
-        name: userInfo.name || "",
+      const sessionToken = await sdk.createSessionToken(payload.sub, {
+        name: payload.name || "",
         expiresInMs: ONE_YEAR_MS,
       });
 
       const cookieOptions = getSessionCookieOptions(req);
-      res.cookie(COOKIE_NAME, sessionToken, { ...cookieOptions, maxAge: ONE_YEAR_MS });
+      res.cookie(COOKIE_NAME, sessionToken, {
+        ...cookieOptions,
+        maxAge: ONE_YEAR_MS,
+      });
 
       res.redirect(302, "/");
     } catch (error) {
-      console.error("[OAuth] Callback failed", error);
+      console.error("[OAuth] Google callback failed", error);
       res.status(500).json({ error: "OAuth callback failed" });
     }
   });
