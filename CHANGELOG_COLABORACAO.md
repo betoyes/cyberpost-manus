@@ -30,6 +30,14 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-07-01] — Claude Code — Roadmap de melhorias e evolução (documentação)
+
+- **O que mudou:** novo `ROADMAP_MELHORIAS.md` na raiz — consolida a análise completa do app pós-migração em itens acionáveis com prioridade (P0–P3): terminar a migração (P0), confiabilidade do executor (risco de post duplicado, loop de "Imagem Ausente" a cada 60s, retry com backoff), operação contínua (expiração do token Meta, watchdog do worker, filtro de status no SQL), corte da última dependência da Manus (storage Forge) + limpeza de código morto, 7 evoluções de produto (aprovação pela UI, preview do Drive, Reels/carrossel, métricas, legendas melhores, multi-conta, auto-rascunho) e higiene técnica. Cada item traz problema, solução proposta e arquivos envolvidos.
+- **Por quê:** registrar as sugestões da análise para desenvolvimento futuro sem redescobrir o contexto.
+- **Arquivos tocados:** `ROADMAP_MELHORIAS.md` (novo), `CHANGELOG_COLABORACAO.md` (esta entrada).
+- **Migração de banco?** Não — documentação apenas, zero mudança de código.
+- **Testado?** N/A (sem mudança funcional).
+
 ### [2026-07-01] — Claude Code — Configuração de conta Instagram/Meta no painel (token + status + teste de conexão)
 
 - **Contexto:** investigação confirmou que a tabela `accounts` estava vazia em produção e que não existia nenhuma tela funcional para salvar `settings.meta_access_token` — a Integrations page só exibia o campo mascarado, sem forma de editá-lo. Esta entrada fecha esse gap.
