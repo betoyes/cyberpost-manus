@@ -71,9 +71,15 @@ describe("approvalGetHandler", () => {
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "approve"), res);
     expect(dbModule.updatePost).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ captionApproved: true, status: "Pendente", approvalToken: null })
+      expect.objectContaining({
+        captionApproved: true,
+        status: "Pendente",
+        approvalToken: null,
+      })
     );
-    expect(res.redirect).toHaveBeenCalledWith(expect.stringContaining("/aprovacao?status=approved"));
+    expect(res.redirect).toHaveBeenCalledWith(
+      expect.stringContaining("/aprovacao?status=approved")
+    );
   });
 
   it("rejects with valid token → status=Fluxo Parado, token cleared", async () => {
@@ -82,33 +88,51 @@ describe("approvalGetHandler", () => {
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "reject"), res);
     expect(dbModule.updatePost).toHaveBeenCalledWith(
       1,
-      expect.objectContaining({ captionApproved: false, status: "Fluxo Parado", approvalToken: null })
+      expect.objectContaining({
+        captionApproved: false,
+        status: "Fluxo Parado",
+        approvalToken: null,
+      })
     );
-    expect(res.redirect).toHaveBeenCalledWith(expect.stringContaining("/aprovacao?status=rejected"));
+    expect(res.redirect).toHaveBeenCalledWith(
+      expect.stringContaining("/aprovacao?status=rejected")
+    );
   });
 
   it("wrong token → no state change, redirect invalid-token", async () => {
-    vi.mocked(dbModule.getPost).mockResolvedValue(makePost({ approvalToken: "other-token" }));
+    vi.mocked(dbModule.getPost).mockResolvedValue(
+      makePost({ approvalToken: "other-token" })
+    );
     const res = makeRes();
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "approve"), res);
     expect(dbModule.updatePost).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith("/aprovacao?status=error&reason=invalid-token");
+    expect(res.redirect).toHaveBeenCalledWith(
+      "/aprovacao?status=error&reason=invalid-token"
+    );
   });
 
   it("already used token (null) → no state change, redirect invalid-token", async () => {
-    vi.mocked(dbModule.getPost).mockResolvedValue(makePost({ approvalToken: null }));
+    vi.mocked(dbModule.getPost).mockResolvedValue(
+      makePost({ approvalToken: null })
+    );
     const res = makeRes();
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "approve"), res);
     expect(dbModule.updatePost).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith("/aprovacao?status=error&reason=invalid-token");
+    expect(res.redirect).toHaveBeenCalledWith(
+      "/aprovacao?status=error&reason=invalid-token"
+    );
   });
 
   it("post not in Aguardando Aprovação → no state change, redirect invalid-token", async () => {
-    vi.mocked(dbModule.getPost).mockResolvedValue(makePost({ status: "Pendente" }));
+    vi.mocked(dbModule.getPost).mockResolvedValue(
+      makePost({ status: "Pendente" })
+    );
     const res = makeRes();
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "approve"), res);
     expect(dbModule.updatePost).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith("/aprovacao?status=error&reason=invalid-token");
+    expect(res.redirect).toHaveBeenCalledWith(
+      "/aprovacao?status=error&reason=invalid-token"
+    );
   });
 
   it("invalid decision → no state change, redirect invalid-request", async () => {
@@ -116,20 +140,28 @@ describe("approvalGetHandler", () => {
     const res = makeRes();
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "delete"), res);
     expect(dbModule.updatePost).not.toHaveBeenCalled();
-    expect(res.redirect).toHaveBeenCalledWith("/aprovacao?status=error&reason=invalid-request");
+    expect(res.redirect).toHaveBeenCalledWith(
+      "/aprovacao?status=error&reason=invalid-request"
+    );
   });
 
   it("idempotency: second click after token cleared → error, no second update", async () => {
     vi.mocked(dbModule.getPost).mockResolvedValueOnce(makePost());
     const res1 = makeRes();
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "approve"), res1);
-    expect(res1.redirect).toHaveBeenCalledWith(expect.stringContaining("approved"));
+    expect(res1.redirect).toHaveBeenCalledWith(
+      expect.stringContaining("approved")
+    );
 
     // Token is now null — second click fails
-    vi.mocked(dbModule.getPost).mockResolvedValueOnce(makePost({ approvalToken: null, status: "Pendente" }));
+    vi.mocked(dbModule.getPost).mockResolvedValueOnce(
+      makePost({ approvalToken: null, status: "Pendente" })
+    );
     const res2 = makeRes();
     await approvalGetHandler(makeReq(1, VALID_TOKEN, "approve"), res2);
-    expect(res2.redirect).toHaveBeenCalledWith("/aprovacao?status=error&reason=invalid-token");
+    expect(res2.redirect).toHaveBeenCalledWith(
+      "/aprovacao?status=error&reason=invalid-token"
+    );
     expect(dbModule.updatePost).toHaveBeenCalledTimes(1); // only once total
   });
 });

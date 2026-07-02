@@ -205,16 +205,23 @@ describe("runPostHandler", () => {
   });
 
   it("Rule 3: persists approvalToken (64-char hex) and approvalEmailSentAt", async () => {
-    const post = makePost({ mode: "aprovar", captionManual: null, theme: "zero-day" });
-    vi.mocked(sdk.authenticateRequest).mockResolvedValue({ isCron: true, taskUid: "uid-abc" } as any);
+    const post = makePost({
+      mode: "aprovar",
+      captionManual: null,
+      theme: "zero-day",
+    });
+    vi.mocked(sdk.authenticateRequest).mockResolvedValue({
+      isCron: true,
+      taskUid: "uid-abc",
+    } as any);
     vi.mocked(dbModule.getPostByScheduleUid).mockResolvedValue(post);
     vi.mocked(dbModule.updatePost).mockResolvedValue(undefined);
     vi.mocked(dbModule.addLog).mockResolvedValue(undefined as any);
     const res = makeRes();
     await runPostHandler(makeReq(), res);
-    const captionCall = vi.mocked(dbModule.updatePost).mock.calls.find(
-      ([, data]) => "captionAi" in (data as object)
-    );
+    const captionCall = vi
+      .mocked(dbModule.updatePost)
+      .mock.calls.find(([, data]) => "captionAi" in (data as object));
     expect(captionCall).toBeDefined();
     const data = captionCall![1] as Record<string, unknown>;
     expect(typeof data.approvalToken).toBe("string");

@@ -2,7 +2,11 @@ import { z } from "zod";
 import { TRPCError } from "@trpc/server";
 import { router, adminProcedure } from "../_core/trpc";
 import * as db from "../db";
-import { schedulePostJob, cancelPostJob, getSessionToken } from "../schedulePost";
+import {
+  schedulePostJob,
+  cancelPostJob,
+  getSessionToken,
+} from "../schedulePost";
 
 const modeEnum = z.enum(["manual", "aprovar", "auto"]);
 const mediaEnum = z.enum(["image", "reel"]);
@@ -48,10 +52,18 @@ export const postsRouter = router({
       // Schedule exact-time Heartbeat cron if scheduledAt is in the future
       if (input.scheduledAt && input.scheduledAt > Date.now()) {
         try {
-          const taskUid = await schedulePostJob(id, input.scheduledAt, getSessionToken(ctx.req));
+          const taskUid = await schedulePostJob(
+            id,
+            input.scheduledAt,
+            getSessionToken(ctx.req)
+          );
           await db.updatePost(id, { scheduleCronTaskUid: taskUid });
         } catch (err) {
-          console.warn("[Schedule] Failed to schedule cron for new post", id, err);
+          console.warn(
+            "[Schedule] Failed to schedule cron for new post",
+            id,
+            err
+          );
         }
       }
       await db.addLog({
@@ -92,10 +104,18 @@ export const postsRouter = router({
 
         if (input.scheduledAt && input.scheduledAt > Date.now()) {
           try {
-            const taskUid = await schedulePostJob(id, input.scheduledAt, getSessionToken(ctx.req));
+            const taskUid = await schedulePostJob(
+              id,
+              input.scheduledAt,
+              getSessionToken(ctx.req)
+            );
             await db.updatePost(id, { scheduleCronTaskUid: taskUid });
           } catch (err) {
-            console.warn("[Schedule] Failed to reschedule cron for post", id, err);
+            console.warn(
+              "[Schedule] Failed to reschedule cron for post",
+              id,
+              err
+            );
           }
         }
       } else {
@@ -129,7 +149,11 @@ export const postsRouter = router({
       if (existing?.scheduleCronTaskUid) {
         await cancelPostJob(existing.scheduleCronTaskUid);
       }
-      await db.updatePost(input.id, { status: "Pendente", note: null, scheduleCronTaskUid: null });
+      await db.updatePost(input.id, {
+        status: "Pendente",
+        note: null,
+        scheduleCronTaskUid: null,
+      });
       await db.addLog({
         postId: input.id,
         kind: "reativado",

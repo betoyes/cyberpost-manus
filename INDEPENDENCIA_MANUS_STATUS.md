@@ -20,6 +20,7 @@ Heartbeat, OAuth) mantendo o app funcionando 100%. Hospedagem migrada para **Rai
 | §3 | E-mail (notificações + aprovação) | ✅ Código publicado, falta env var | Resend (`resend` SDK) |
 | §2 | Executor (Drive + Instagram) | ✅ Código publicado, falta credenciais | Node próprio (Service Account + Graph API) |
 | §5 | Cron (disparo no horário exato) | ✅ Código publicado, falta credenciais | Worker in-process (`setInterval`, sem Heartbeat) |
+| — | Configuração de conta Instagram/Meta no painel | ✅ Concluído | Tela `/accounts` — token, status, teste de conexão |
 | §6B (storage) | Upload/URL pública das imagens | ⏸️ Mantido de propósito | Continua no Forge (S3) da Manus — decisão consciente, fora de escopo por ora |
 
 ## Arquitetura — antes e depois
@@ -49,6 +50,13 @@ Resend. Login é Google Sign-In direto. Só o **storage de imagens continua no F
   reusado por `queueNextHandler` legado e pelo executor novo), `triggerAiApprovalFlow`
   (`server/schedulePost.ts`, reusado por `runPostHandler` legado — Heartbeat — e pelo executor
   novo).
+- **Configuração de conta Instagram/Meta no painel:** `client/src/pages/Accounts.tsx` (seção
+  "Conexão Meta" — campo de token `password`, botões Salvar/Remover/Testar conexão, card de
+  status), `server/routers/accounts.ts` (`metaStatus`, `saveMetaToken`, `removeMetaToken`,
+  `testMetaConnection`), `server/_core/trpc.ts` (novo `ownerProcedure`, exige
+  `ctx.user.email === EMAIL_OWNER` além de `role === "admin"`), `server/instagramGraph.ts`
+  (`testInstagramConnection` — `GET` somente-leitura, nunca publica), `server/db.ts`
+  (`getSettingMeta`, `deleteSetting`).
 
 ## O que foi mantido de propósito (não removido)
 
@@ -75,8 +83,10 @@ Resend. Login é Google Sign-In direto. Só o **storage de imagens continua no F
 | `PUBLIC_BASE_URL` | URL pública do app (aprovação por e-mail + Instagram precisam) | Confirmar que está setada |
 
 **Não são env vars — já existem em `settings`/`accounts`, editáveis pelo painel:**
-`meta_access_token` (token long-lived do Meta) e `igUserId` da conta em `/contas` — precisam
-estar preenchidos para o executor publicar.
+`meta_access_token` (token long-lived do Meta) e `igUserId` da conta padrão — **agora
+configuráveis diretamente pela tela `/accounts`** (seção "Conexão Meta": campo de token +
+botões Salvar/Remover/Testar conexão). Antes desta atualização, não havia UI funcional para
+salvar o token — só um placeholder somente-leitura em `/integrations`.
 
 Opcional: `LLM_MODEL` (default `gpt-4o-mini`).
 
@@ -88,7 +98,9 @@ Opcional: `LLM_MODEL` (default `gpt-4o-mini`).
    JSON, compartilhar a pasta `CybersecCAST` do Drive com o e-mail da service account.
 3. Pegar o ID da pasta do Drive (não o nome) e setar `GOOGLE_SA_JSON` + `DRIVE_FOLDER_ID` no
    Railway.
-4. Conferir `meta_access_token` e `igUserId` na tela de Integrações/Contas do painel.
+4. Em `/accounts`: confirmar/cadastrar a conta CybersecCAST com o `igUserId`, colar o token do
+   Meta no campo "Meta Access Token" → Salvar token → clicar em "Testar conexão Meta" e conferir
+   que retorna sucesso antes de testar publicação real.
 5. Testar publicação real com um post de teste (legenda manual + imagem no Drive), confirmar que
    vira "Postado" com permalink.
 6. Só depois de tudo confirmado: desativar manualmente o executor Python + Heartbeat do lado da
@@ -104,10 +116,12 @@ Opcional: `LLM_MODEL` (default `gpt-4o-mini`).
 6bc357b feat: LLM próprio (OpenAI) e e-mail próprio (Resend), substituindo Forge/Manus
 56e1763 feat: executor próprio (Drive + Instagram) e worker in-process, substituindo o script Python e o Heartbeat da Manus
 d9949d4 chore: formatação prettier (sem mudança funcional)
+f459b12 docs: status completo da migração de independência da Manus
+f4b11c3 feat: configuração de conta Instagram/Meta no painel (token, status, teste de conexão)
 ```
 
 ## Testes
 
-91/91 passando (`./node_modules/.bin/vitest run`), `tsc --noEmit` e `npm run build` limpos em
+103/103 passando (`./node_modules/.bin/vitest run`), `tsc --noEmit` e `npm run build` limpos em
 todos os commits acima. Detalhes de cobertura de cada peça estão nas entradas correspondentes do
 `CHANGELOG_COLABORACAO.md`.

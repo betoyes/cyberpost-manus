@@ -30,6 +30,14 @@ Modelo mínimo:
 
 ## Histórico (mais recente no topo)
 
+### [2026-07-01] — Claude Code — Doc de status atualizado + formatação Prettier pendente
+
+- **O que mudou:**
+  - `INDEPENDENCIA_MANUS_STATUS.md`: atualizado para refletir o commit `f4b11c3` (tela de Conexão Meta em `/accounts`) — nova linha na tabela de status, arquivos da peça, passo a passo do dono revisado (passo 4 agora aponta para `/accounts`), contagem de testes 91→103 e histórico de commits completado.
+  - Formatação Prettier pura (sem mudança funcional) em 6 arquivos que ficaram de fora do commit anterior: `client/src/components/DashboardLayout.tsx`, `client/src/pages/ApprovalConfirm.tsx`, `client/src/pages/ApprovalResult.tsx`, `server/approvalHandler.test.ts`, `server/routers/posts.ts`, `server/schedulePost.test.ts`.
+- **Migração de banco?** Não.
+- **Testado?** 103/103 passando + `tsc --noEmit` limpo após as mudanças.
+
 ### [2026-07-01] — Claude Code — Roadmap de melhorias e evolução (documentação)
 
 - **O que mudou:** novo `ROADMAP_MELHORIAS.md` na raiz — consolida a análise completa do app pós-migração em itens acionáveis com prioridade (P0–P3): terminar a migração (P0), confiabilidade do executor (risco de post duplicado, loop de "Imagem Ausente" a cada 60s, retry com backoff), operação contínua (expiração do token Meta, watchdog do worker, filtro de status no SQL), corte da última dependência da Manus (storage Forge) + limpeza de código morto, 7 evoluções de produto (aprovação pela UI, preview do Drive, Reels/carrossel, métricas, legendas melhores, multi-conta, auto-rascunho) e higiene técnica. Cada item traz problema, solução proposta e arquivos envolvidos.

@@ -29,7 +29,8 @@ export default function ApprovalConfirm() {
             <CardTitle>Link inválido</CardTitle>
           </CardHeader>
           <CardContent className="text-center text-sm text-muted-foreground">
-            Este link é inválido ou está incompleto. Verifique o e-mail original.
+            Este link é inválido ou está incompleto. Verifique o e-mail
+            original.
           </CardContent>
         </Card>
       </div>
@@ -60,7 +61,9 @@ export default function ApprovalConfirm() {
           <Button
             className="w-full"
             variant={isApprove ? "default" : "destructive"}
-            onClick={() => { window.location.href = actionUrl!; }}
+            onClick={() => {
+              window.location.href = actionUrl!;
+            }}
           >
             {isApprove ? (
               <>
