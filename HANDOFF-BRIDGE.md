@@ -61,19 +61,28 @@ O executor in-process (poll de 60s) publica sozinho quando `scheduledAt <= now`.
 
 **Testes:** suíte completa **119 verde**, `tsc --noEmit` limpo.
 
-## Fase 2 — PRÓXIMA (ponte no `_Jobs`, ainda não começou)
+## Fase 2 — CONCLUÍDA (ponte no `_Jobs`, 2026-07-09, commit `f2ffbb1`)
 
-Criar `_Jobs/voz/postador.py` — cliente HTTP determinístico que fala com o Railway:
-- Lê `BRIDGE_API_TOKEN` e a base URL do `_Jobs/config/config.json` (gitignored, o modelo
-  nunca vê a chave). Sugestão de config:
-  `"postador": { "base_url": "https://cyberpost-manus-production.up.railway.app", "token": "<...>" }`
-- Dispara `POST /api/bridge/post` (gatilho tipo "posta isso pra <cliente>") e consulta
-  `GET /api/bridge/status/:id`. Segue o padrão dos outros bridges (`arte.py`, `avatar.py`,
-  `social.py`).
-- Registrar no `CAPACIDADES.md` + `GATILHOS.md` (com data) e **reiniciar** `voz/server.py`
-  (a ponte cacheia módulos — browser refresh não basta).
-- **Não precisa do token pra ESCREVER o código** — só lê do config. O token/URL só entram
-  no teste ao vivo.
+`_Jobs/voz/postador.py` criado — cliente HTTP determinístico que fala com o Railway,
+espelhando `avatar.py`/`social.py`:
+- Lê `postador.base_url` + `postador.token` do `_Jobs/config/config.json` (gitignored, o
+  modelo nunca vê a chave — entra só no header `Authorization: Bearer`). Stanza já no
+  `config.exemplo.json`. Sem base_url+token → a ponte reporta `nao_configurado` (não finge).
+- `postar(prateleira, image_url, caption, scheduled_at?)` → `POST /api/bridge/post`
+  (valida URL http(s) + legenda <=2200 na fronteira); `status(post_id)` → GET; e
+  `confirmar_publicacao()` registra a entrega datada na prateleira quando o post vira
+  `Postado` (fecha o loop publicado→radar; reusa `arte.registrar_entrega`).
+- Wiring em `voz/server.py`: rotas `/postador/pedido` (reconhece "posta isso pra X"),
+  `/postador/postar` (escrita confirmada), `/postador/status`. Gatilho registrado em
+  `GATILHOS.md · 2026-07-09`.
+- **Verificado:** py_compile + smoke tests (intenção, `nao_configurado` sem config,
+  validação de URL/legenda, token nunca vaza no retorno). Falta só o teste AO VIVO, que
+  depende do P0 (chaves) abaixo.
+- ⚠️ **Ao editar o postador.py, reiniciar `voz/server.py`** — a ponte cacheia módulos.
+
+**Falta pra funcionar de verdade:** o P0 (chaves abaixo). Sem `postador.token` no config,
+`postar()` devolve `nao_configurado`. A imagem (URL pública) hoje entra manual; o
+encadeamento automático arte→post é a Fase 3.
 
 ## Fase 3 — aposentar o Instagram do Artista
 
