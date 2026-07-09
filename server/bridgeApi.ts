@@ -2,7 +2,8 @@ import type { Request, Response } from "express";
 import { ENV } from "./_core/env";
 import { bearerTokenMatches } from "./_core/bearerToken";
 import * as db from "./db";
-import { storagePut } from "./storage";
+import { createHash } from "node:crypto";
+import { r2PutImage } from "./r2";
 
 /**
  * JOBS bridge (/api/bridge/*).
@@ -107,8 +108,9 @@ async function hostBase64Image(imageBase64: string, filename: string): Promise<s
     /\.(png|jpe?g|webp)$/i,
     "",
   );
-  const { url } = await storagePut(`bridge/${safeName}.${type.ext}`, buf, type.mime);
-  return `${ENV.publicBaseUrl}${url}`;
+  // Content hash → a unique, stable key (re-posting the same art reuses the object).
+  const hash = createHash("sha256").update(buf).digest("hex").slice(0, 16);
+  return r2PutImage(`bridge/${safeName}-${hash}.${type.ext}`, buf, type.mime);
 }
 
 type BridgePostBody = {

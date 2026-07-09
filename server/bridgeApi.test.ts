@@ -8,12 +8,12 @@ vi.mock("./db", () => ({
   listLogs: vi.fn(async () => []),
 }));
 
-vi.mock("./storage", () => ({
-  storagePut: vi.fn(async (key: string) => ({ key, url: `/manus-storage/${key}` })),
+vi.mock("./r2", () => ({
+  r2PutImage: vi.fn(async () => "https://pub-test.r2.dev/bridge/art-abc.png"),
 }));
 
 import * as db from "./db";
-import { storagePut } from "./storage";
+import { r2PutImage } from "./r2";
 import { bridgePostHandler, bridgeStatusHandler } from "./bridgeApi";
 
 const TOKEN = "brg_7Kx2mPv7nR4tZ9wLbY3eHfA6dG1sJ5q";
@@ -46,10 +46,9 @@ describe("POST /api/bridge/post", () => {
     delete process.env.ALLOWED_IMAGE_HOSTS;
     vi.mocked(db.createPost).mockReset().mockResolvedValue(42 as any);
     vi.mocked(db.addLog).mockReset().mockResolvedValue(undefined as any);
-    vi.mocked(storagePut).mockReset().mockResolvedValue({
-      key: "bridge/art.png",
-      url: "/manus-storage/bridge/art_abc.png",
-    } as any);
+    vi.mocked(r2PutImage)
+      .mockReset()
+      .mockResolvedValue("https://pub-test.r2.dev/bridge/art-abc.png");
   });
 
   it("rejects requests without a token", async () => {
@@ -146,10 +145,10 @@ describe("POST /api/bridge/post", () => {
       }),
       res
     );
-    expect(storagePut).toHaveBeenCalled();
+    expect(r2PutImage).toHaveBeenCalled();
     expect(db.createPost).toHaveBeenCalledWith(
       expect.objectContaining({
-        imageUrl: "https://cyberpost.example/manus-storage/bridge/art_abc.png",
+        imageUrl: "https://pub-test.r2.dev/bridge/art-abc.png",
         captionManual: "Arte real do CybersecCAST",
         captionApproved: true,
         mode: "manual",
@@ -170,7 +169,7 @@ describe("POST /api/bridge/post", () => {
       res
     );
     expect(res._status).toBe(400);
-    expect(storagePut).not.toHaveBeenCalled();
+    expect(r2PutImage).not.toHaveBeenCalled();
     expect(db.createPost).not.toHaveBeenCalled();
   });
 

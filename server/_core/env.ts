@@ -72,4 +72,24 @@ export const ENV = {
   get driveFolderId() {
     return process.env.DRIVE_FOLDER_ID ?? "";
   },
+  // Cloudflare R2 (S3-compatible) — public host for images the JOBS bridge sends
+  // as bytes (server/r2.ts). Replaces the dead Manus Forge storage for the bridge.
+  // .trim() guards against pasted whitespace (same reason as the Google getters).
+  get r2AccountId() {
+    return (process.env.R2_ACCOUNT_ID ?? "").trim();
+  },
+  get r2AccessKeyId() {
+    return (process.env.R2_ACCESS_KEY_ID ?? "").trim();
+  },
+  get r2SecretAccessKey() {
+    return (process.env.R2_SECRET_ACCESS_KEY ?? "").trim();
+  },
+  get r2Bucket() {
+    return (process.env.R2_BUCKET ?? "").trim();
+  },
+  // Public read URL of the bucket (the R2.dev subdomain or a custom domain), e.g.
+  // https://pub-xxxx.r2.dev — the base the Instagram Graph API fetches the image from.
+  get r2PublicBaseUrl() {
+    return (process.env.R2_PUBLIC_BASE_URL ?? "").trim().replace(/\/+$/, "");
+  },
 };
