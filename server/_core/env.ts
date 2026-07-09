@@ -49,6 +49,21 @@ export const ENV = {
   get queueApiToken() {
     return process.env.QUEUE_API_TOKEN ?? "";
   },
+  // Shared secret for the JOBS bridge (/api/bridge/*): lets the JOBS "brain"
+  // originate an already-approved post from a public image URL (produced by the
+  // Artista factory). Getter so tests can set process.env after module load.
+  get bridgeApiToken() {
+    return process.env.BRIDGE_API_TOKEN ?? "";
+  },
+  // Optional defense-in-depth allowlist of hostnames the bridge will accept an
+  // imageUrl from (comma-separated). Empty = allow any public http(s) host
+  // (default). Set to the Artista CDN host(s) once known.
+  get allowedImageHosts(): string[] {
+    return (process.env.ALLOWED_IMAGE_HOSTS ?? "")
+      .split(",")
+      .map(h => h.trim().toLowerCase())
+      .filter(Boolean);
+  },
   // Own executor (Google Drive read + Instagram publish) — replaces the Manus
   // Python executor script. HANDOFF_INDEPENDENCIA_MANUS.md §2.
   get googleServiceAccountJson() {

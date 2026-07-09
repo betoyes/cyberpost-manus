@@ -243,4 +243,70 @@ describe("runExecutionForPost", () => {
     );
     expect(notifyOwner).toHaveBeenCalled();
   });
+
+  it("publishes a bridge post directly from its external URL, skipping Drive", async () => {
+    vi.mocked(db.getPost).mockResolvedValue({
+      ...basePost,
+      imageUrl: "https://cdn.artista/artes/sunnysystems/thumb.png",
+    } as any);
+    vi.mocked(db.resolvePostAccount).mockResolvedValue({
+      id: 1,
+      name: "Conta",
+      handle: null,
+      igUserId: "ig-1",
+    });
+    vi.mocked(db.getSetting).mockResolvedValue("meta-token");
+    vi.mocked(publishImageToInstagram).mockResolvedValue({
+      mediaId: "media-9",
+      permalink: "https://instagram.com/p/abc",
+    });
+
+    await runExecutionForPost(1);
+
+    // Drive is bypassed entirely for external-URL posts.
+    expect(downloadDriveImage).not.toHaveBeenCalled();
+    expect(storagePut).not.toHaveBeenCalled();
+    expect(publishImageToInstagram).toHaveBeenCalledWith(
+      expect.objectContaining({
+        igUserId: "ig-1",
+        imageUrl: "https://cdn.artista/artes/sunnysystems/thumb.png",
+        caption: "Legenda manual pronta",
+        accessToken: "meta-token",
+      })
+    );
+    expect(db.updatePost).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({
+        status: "Postado",
+        instagramId: "media-9",
+        permalink: "https://instagram.com/p/abc",
+      })
+    );
+  });
+
+  it("marks a bridge post Fluxo Parado when direct publishing throws", async () => {
+    vi.mocked(db.getPost).mockResolvedValue({
+      ...basePost,
+      imageUrl: "https://cdn.artista/artes/sunnysystems/thumb.png",
+    } as any);
+    vi.mocked(db.resolvePostAccount).mockResolvedValue({
+      id: 1,
+      name: "Conta",
+      handle: null,
+      igUserId: "ig-1",
+    });
+    vi.mocked(db.getSetting).mockResolvedValue("meta-token");
+    vi.mocked(publishImageToInstagram).mockRejectedValue(
+      new Error("Instagram Graph API error (400): boom")
+    );
+
+    await runExecutionForPost(1);
+
+    expect(downloadDriveImage).not.toHaveBeenCalled();
+    expect(db.updatePost).toHaveBeenCalledWith(
+      1,
+      expect.objectContaining({ status: "Fluxo Parado" })
+    );
+    expect(notifyOwner).toHaveBeenCalled();
+  });
 });

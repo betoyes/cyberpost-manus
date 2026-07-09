@@ -15,6 +15,7 @@ import {
   queueApprovalHandler,
   queueGenerateCaptionHandler,
 } from "../queueApi";
+import { bridgePostHandler, bridgeStatusHandler } from "../bridgeApi";
 import { runPostHandler } from "../schedulePost";
 import { approvalGetHandler } from "../approvalHandler";
 import { startExecutorWorker } from "../executorWorker";
@@ -59,6 +60,10 @@ async function startServer() {
   app.post("/api/queue/report", queueReportHandler);
   app.post("/api/queue/approval", queueApprovalHandler);
   app.post("/api/queue/generate-caption", queueGenerateCaptionHandler);
+  // JOBS bridge (token-authenticated): originate an already-approved post from a
+  // public image URL (Artista) and read its publish status.
+  app.post("/api/bridge/post", bridgePostHandler);
+  app.get("/api/bridge/status/:id", bridgeStatusHandler);
   // tRPC API
   app.use(
     "/api/trpc",

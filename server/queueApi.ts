@@ -1,5 +1,6 @@
 import type { Request, Response } from "express";
 import { ENV } from "./_core/env";
+import { bearerTokenMatches } from "./_core/bearerToken";
 import { notifyOwner } from "./_core/notification";
 import * as db from "./db";
 import { resolveCaption, interpretApprovalReply } from "./engine";
@@ -17,17 +18,7 @@ import { generateCaption } from "./caption";
  */
 
 function checkToken(req: Request): boolean {
-  const auth = req.headers.authorization;
-  const expected = ENV.queueApiToken;
-  if (!expected) return false;
-  if (typeof auth !== "string" || !auth.startsWith("Bearer ")) return false;
-  const token = auth.slice(7).trim();
-  // constant-time-ish compare
-  if (token.length !== expected.length) return false;
-  let diff = 0;
-  for (let i = 0; i < token.length; i++)
-    diff |= token.charCodeAt(i) ^ expected.charCodeAt(i);
-  return diff === 0;
+  return bearerTokenMatches(req.headers.authorization, ENV.queueApiToken);
 }
 
 /**
@@ -109,7 +100,7 @@ export async function queueNextHandler(req: Request, res: Response) {
     });
   } catch (error) {
     const err = error as Error;
-    return res.status(500).json({ error: err.message, stack: err.stack });
+    return res.status(500).json({ error: err.message });
   }
 }
 
@@ -126,11 +117,9 @@ export async function queueApprovalHandler(req: Request, res: Response) {
     if (!checkToken(req))
       return res.status(401).json({ error: "unauthorized" });
 
-    const { postId, reply, imageUrl, imageStorageKey } = (req.body ?? {}) as {
+    const { postId, reply } = (req.body ?? {}) as {
       postId?: number;
       reply?: string;
-      imageUrl?: string;
-      imageStorageKey?: string;
     };
     if (typeof postId !== "number" || typeof reply !== "string") {
       return res.status(400).json({ error: "postId and reply are required" });
@@ -150,11 +139,14 @@ export async function queueApprovalHandler(req: Request, res: Response) {
     }
 
     if (decision === "approve") {
+      // Note: this endpoint deliberately does NOT write imageUrl/imageStorageKey.
+      // The own executor sources Drive posts by filename, and treats an http(s)
+      // imageUrl as a "publish this URL directly" signal (executor.ts). Only the
+      // token-gated, validated bridge (/api/bridge/post) may set that field, so a
+      // QUEUE_API_TOKEN holder can never inject a publish target here.
       await db.updatePost(postId, {
         captionApproved: true,
         status: "Pendente",
-        imageUrl: imageUrl ?? post.imageUrl ?? null,
-        imageStorageKey: imageStorageKey ?? post.imageStorageKey ?? null,
         note: null,
       });
       await db.addLog({
@@ -187,7 +179,7 @@ export async function queueApprovalHandler(req: Request, res: Response) {
     return res.json({ ok: true, decision: "reject" });
   } catch (error) {
     const err = error as Error;
-    return res.status(500).json({ error: err.message, stack: err.stack });
+    return res.status(500).json({ error: err.message });
   }
 }
 
@@ -197,21 +189,12 @@ export async function queueReportHandler(req: Request, res: Response) {
     if (!checkToken(req))
       return res.status(401).json({ error: "unauthorized" });
 
-    const {
-      postId,
-      result,
-      permalink,
-      instagramId,
-      imageUrl,
-      imageStorageKey,
-      message,
-    } = (req.body ?? {}) as {
+    const { postId, result, permalink, instagramId, message } = (req.body ??
+      {}) as {
       postId?: number;
       result?: "posted" | "missing-image" | "error";
       permalink?: string;
       instagramId?: string;
-      imageUrl?: string;
-      imageStorageKey?: string;
       message?: string;
     };
 
@@ -223,12 +206,12 @@ export async function queueReportHandler(req: Request, res: Response) {
     if (!post) return res.json({ ok: true, skipped: "post-not-found" });
 
     if (result === "posted") {
+      // See queueApprovalHandler: imageUrl/imageStorageKey are intentionally not
+      // written here — only the validated bridge may set an executable imageUrl.
       await db.updatePost(postId, {
         status: "Postado",
         permalink: permalink ?? null,
         instagramId: instagramId ?? null,
-        imageUrl: imageUrl ?? post.imageUrl ?? null,
-        imageStorageKey: imageStorageKey ?? post.imageStorageKey ?? null,
         note: null,
       });
       await db.addLog({
@@ -274,6 +257,6 @@ export async function queueReportHandler(req: Request, res: Response) {
     return res.json({ ok: true });
   } catch (error) {
     const err = error as Error;
-    return res.status(500).json({ error: err.message, stack: err.stack });
+    return res.status(500).json({ error: err.message });
   }
 }

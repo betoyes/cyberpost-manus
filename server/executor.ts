@@ -8,6 +8,16 @@ import { publishImageToInstagram } from "./instagramGraph";
 import { storagePut } from "./storage";
 
 /**
+ * A bridge-sourced post carries its image as an absolute public http(s) URL in
+ * `imageUrl` (set by /api/bridge/post — the JOBS bridge). Drive-sourced posts
+ * leave `imageUrl` null until posting and then store a RELATIVE storage key, so
+ * this predicate cleanly routes the two without a schema change.
+ */
+function isExternalSourceUrl(value: string | null | undefined): value is string {
+  return typeof value === "string" && /^https?:\/\//i.test(value);
+}
+
+/**
  * Own executor: applies the 3 owner rules and, when ready, downloads the
  * image from Google Drive and publishes to Instagram — replacing the Manus
  * Python executor script. HANDOFF_INDEPENDENCIA_MANUS.md §2/§5.
@@ -69,6 +79,51 @@ export async function runExecutionForPost(postId: number): Promise<void> {
       title: "CybersecCAST: token Meta ausente",
       content: `"${post.filename}" não pôde ser publicado: token do Meta não configurado.`,
     });
+    return;
+  }
+
+  // Bridge posts (JOBS): the art already lives at a public URL (Artista). Publish
+  // it straight from there and skip Google Drive entirely.
+  if (isExternalSourceUrl(post.imageUrl)) {
+    try {
+      const result = await publishImageToInstagram({
+        igUserId: account.igUserId,
+        imageUrl: post.imageUrl,
+        caption: cap.caption,
+        accessToken: metaToken,
+      });
+      await db.updatePost(postId, {
+        status: "Postado",
+        instagramId: result.mediaId,
+        permalink: result.permalink,
+        note: null,
+      });
+      await db.addLog({
+        postId,
+        kind: "posted",
+        message: `Publicado no Instagram${
+          result.permalink ? `: ${result.permalink}` : ""
+        }`,
+      });
+      await notifyOwner({
+        title: "CybersecCAST: post publicado",
+        content: `"${post.filename}" foi publicado no Instagram.${
+          result.permalink ? ` Link: ${result.permalink}` : ""
+        }`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await db.updatePost(postId, { status: "Fluxo Parado", note: message });
+      await db.addLog({
+        postId,
+        kind: "error",
+        message: `Erro na execução: ${message}`,
+      });
+      await notifyOwner({
+        title: "CybersecCAST: erro na publicação",
+        content: `Falha ao publicar "${post.filename}". Detalhe: ${message}`,
+      });
+    }
     return;
   }
 
