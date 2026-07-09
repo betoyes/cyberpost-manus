@@ -2,6 +2,7 @@ import type { Request, Response } from "express";
 import { ENV } from "./_core/env";
 import { bearerTokenMatches } from "./_core/bearerToken";
 import * as db from "./db";
+import { storagePut } from "./storage";
 
 /**
  * JOBS bridge (/api/bridge/*).
@@ -57,8 +58,62 @@ function isPublicHttpUrl(value: unknown): value is string {
   return true;
 }
 
+/** Max decoded size accepted via imageBase64 (Instagram's own image limit is ~8MB). */
+const MAX_IMAGE_BYTES = 15 * 1024 * 1024;
+
+/** Sniff PNG / JPEG / WebP from magic bytes; null if unrecognized. */
+function sniffImageType(buf: Buffer): { ext: string; mime: string } | null {
+  if (
+    buf.length >= 8 &&
+    buf[0] === 0x89 && buf[1] === 0x50 && buf[2] === 0x4e && buf[3] === 0x47
+  ) {
+    return { ext: "png", mime: "image/png" };
+  }
+  if (buf.length >= 3 && buf[0] === 0xff && buf[1] === 0xd8 && buf[2] === 0xff) {
+    return { ext: "jpg", mime: "image/jpeg" };
+  }
+  if (
+    buf.length >= 12 &&
+    buf.toString("ascii", 0, 4) === "RIFF" &&
+    buf.toString("ascii", 8, 12) === "WEBP"
+  ) {
+    return { ext: "webp", mime: "image/webp" };
+  }
+  return null;
+}
+
+/**
+ * Decode the art bytes (base64, optionally a data: URL), validate them, store on
+ * the Postador's own storage (same backend/URL the legacy Drive flow publishes
+ * from), and return the PUBLIC URL Instagram can fetch. Hosting the art here is
+ * exactly the Fase-3 wiring: JOBS/Artista hand over the bytes, the Postador is the
+ * public host — no external URL to manage.
+ */
+async function hostBase64Image(imageBase64: string, filename: string): Promise<string> {
+  const b64 = imageBase64.replace(/^data:[^;]+;base64,/, "");
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(b64, "base64");
+  } catch {
+    throw new Error("imageBase64 is not valid base64");
+  }
+  if (buf.length === 0) throw new Error("imageBase64 decoded to empty bytes");
+  if (buf.length > MAX_IMAGE_BYTES) {
+    throw new Error(`image exceeds ${Math.round(MAX_IMAGE_BYTES / (1024 * 1024))}MB`);
+  }
+  const type = sniffImageType(buf);
+  if (!type) throw new Error("image must be PNG, JPEG, or WebP");
+  const safeName = (filename.replace(/[^\w.-]/g, "_").slice(0, 80) || "art").replace(
+    /\.(png|jpe?g|webp)$/i,
+    "",
+  );
+  const { url } = await storagePut(`bridge/${safeName}.${type.ext}`, buf, type.mime);
+  return `${ENV.publicBaseUrl}${url}`;
+}
+
 type BridgePostBody = {
   imageUrl?: unknown;
+  imageBase64?: unknown;
   caption?: unknown;
   filename?: unknown;
   accountId?: unknown;
@@ -68,7 +123,9 @@ type BridgePostBody = {
 /**
  * POST /api/bridge/post
  * Body: {
- *   imageUrl:   string  (required) — public http(s) URL of the art to publish
+ *   imageBase64: string (one of) — the art's raw bytes; hosted on the Postador's
+ *                                  own storage and published from there (Fase 3)
+ *   imageUrl:   string  (one of) — an already-public http(s) URL of the art
  *   caption:    string  (required) — the approved caption (<= 2200 chars)
  *   filename?:  string            — human label for logs/emails (default derived)
  *   accountId?: number            — target Instagram account (default = default account)
@@ -82,12 +139,29 @@ export async function bridgePostHandler(req: Request, res: Response) {
 
     const body = (req.body ?? {}) as BridgePostBody;
 
-    if (!isPublicHttpUrl(body.imageUrl)) {
-      return res
-        .status(400)
-        .json({ error: "imageUrl is required and must be a public http(s) URL" });
+    // Two ways to supply the art: (1) imageBase64 — the raw bytes, which the
+    // Postador HOSTS on its own storage and then publishes from (the Fase-3 path:
+    // use our own arts, no external URL); (2) imageUrl — an already-public URL.
+    // Base64 wins when present.
+    let imageUrl: string;
+    if (typeof body.imageBase64 === "string" && body.imageBase64.length > 0) {
+      const filenameHint =
+        typeof body.filename === "string" && body.filename.trim().length > 0
+          ? body.filename.trim()
+          : "art";
+      try {
+        imageUrl = await hostBase64Image(body.imageBase64, filenameHint);
+      } catch (e) {
+        return res.status(400).json({ error: (e as Error).message });
+      }
+    } else if (isPublicHttpUrl(body.imageUrl)) {
+      imageUrl = body.imageUrl;
+    } else {
+      return res.status(400).json({
+        error:
+          "provide imageBase64 (art bytes) or imageUrl (a public http(s) URL)",
+      });
     }
-    const imageUrl = body.imageUrl;
 
     const caption =
       typeof body.caption === "string" ? body.caption.trim() : "";

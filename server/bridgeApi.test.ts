@@ -8,7 +8,12 @@ vi.mock("./db", () => ({
   listLogs: vi.fn(async () => []),
 }));
 
+vi.mock("./storage", () => ({
+  storagePut: vi.fn(async (key: string) => ({ key, url: `/manus-storage/${key}` })),
+}));
+
 import * as db from "./db";
+import { storagePut } from "./storage";
 import { bridgePostHandler, bridgeStatusHandler } from "./bridgeApi";
 
 const TOKEN = "brg_7Kx2mPv7nR4tZ9wLbY3eHfA6dG1sJ5q";
@@ -37,9 +42,14 @@ function postReq(body: unknown, headers: Record<string, string> = AUTH): Request
 describe("POST /api/bridge/post", () => {
   beforeEach(() => {
     process.env.BRIDGE_API_TOKEN = TOKEN;
+    process.env.PUBLIC_BASE_URL = "https://cyberpost.example";
     delete process.env.ALLOWED_IMAGE_HOSTS;
     vi.mocked(db.createPost).mockReset().mockResolvedValue(42 as any);
     vi.mocked(db.addLog).mockReset().mockResolvedValue(undefined as any);
+    vi.mocked(storagePut).mockReset().mockResolvedValue({
+      key: "bridge/art.png",
+      url: "/manus-storage/bridge/art_abc.png",
+    } as any);
   });
 
   it("rejects requests without a token", async () => {
@@ -120,6 +130,55 @@ describe("POST /api/bridge/post", () => {
     expect(db.addLog).toHaveBeenCalledWith(
       expect.objectContaining({ postId: 42, kind: "bridge" })
     );
+  });
+
+  it("hosts imageBase64 on the Postador's own storage and posts from that URL", async () => {
+    const png = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.alloc(32),
+    ]);
+    const res = mockRes();
+    await bridgePostHandler(
+      postReq({
+        imageBase64: png.toString("base64"),
+        caption: "Arte real do CybersecCAST",
+        filename: "cyberseccast-1",
+      }),
+      res
+    );
+    expect(storagePut).toHaveBeenCalled();
+    expect(db.createPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageUrl: "https://cyberpost.example/manus-storage/bridge/art_abc.png",
+        captionManual: "Arte real do CybersecCAST",
+        captionApproved: true,
+        mode: "manual",
+        status: "Pendente",
+      })
+    );
+    expect(res._status).toBe(200);
+    expect(res._json).toMatchObject({ ok: true, postId: 42, status: "Pendente" });
+  });
+
+  it("rejects imageBase64 that is not a real image", async () => {
+    const res = mockRes();
+    await bridgePostHandler(
+      postReq({
+        imageBase64: Buffer.from("hello, definitely not an image").toString("base64"),
+        caption: "x",
+      }),
+      res
+    );
+    expect(res._status).toBe(400);
+    expect(storagePut).not.toHaveBeenCalled();
+    expect(db.createPost).not.toHaveBeenCalled();
+  });
+
+  it("rejects when neither imageBase64 nor imageUrl is provided", async () => {
+    const res = mockRes();
+    await bridgePostHandler(postReq({ caption: "x" }), res);
+    expect(res._status).toBe(400);
+    expect(db.createPost).not.toHaveBeenCalled();
   });
 
   it("rejects a non-integer accountId", async () => {
