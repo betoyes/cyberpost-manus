@@ -2,42 +2,27 @@
 
 > **Leia este documento por inteiro antes de editar qualquer arquivo.** Ele descreve a arquitetura real, as regras de negócio que **não podem ser quebradas**, e as armadilhas mais comuns. O objetivo é permitir que outra IA ou desenvolvedor faça ajustes sem "sujar" ou quebrar o sistema.
 >
-> **REGRA DE COLABORAÇÃO (obrigatória):** este projeto é mantido em conjunto por **Manus** e **Claude Code**. Toda alteração DEVE ser registrada em **`CHANGELOG_COLABORACAO.md`** (uma entrada nova no topo) antes do commit/PR. Se você é o Claude Code, leia também **`INSTRUCOES_PARA_CLAUDE.md`**. O changelog é o canal de sincronização entre as duas IAs — leia-o ao começar e atualize-o ao terminar.
+> Colaboração Manus encerrada — histórico em `arquivo/CHANGELOG_COLABORACAO.md`.
+> Contexto atual: `HANDOFF-BRIDGE.md`.
 
 ---
 
 ## 0. TL;DR (o mínimo que você precisa saber)
 
-- Stack: **React 19 + Vite + Tailwind 4** (frontend) · **Express 4 + tRPC 11 + Drizzle ORM (MySQL/TiDB)** (backend) · **Manus OAuth** para login. Processo **único Node.js**.
-- O sistema tem duas metades: **"cérebro"** (este app web) e **"braço/executor"** (uma tarefa agendada do Manus + o script `instagram_automation.py`). O app **decide**; o executor **age** (Drive/Instagram/Gmail).
+- Stack: **React 19 + Vite + Tailwind 4** (frontend) · **Express 4 + tRPC 11 + Drizzle ORM (MySQL do Railway)** (backend) · **login Google** (Google Sign-In). Processo **único Node.js**, hospedado no Railway.
+- O executor é um **worker in-process** (`server/executorWorker.ts`, tick de 60s) no mesmo processo do app: ele mesmo lê o Drive, publica no Instagram e notifica por e-mail.
 - O app é a **fonte única de verdade** (banco de dados). A planilha Google Sheets foi **aposentada** — não reintroduza dependência dela.
 - **Regra sagrada:** legenda **manual** posta direto; legenda de **IA** só vai ao ar **após aprovação por e-mail**. Sem legenda válida → **"Fluxo Parado"** (nunca publicar).
 - Há rotas HTTP **fora do tRPC** (cron + fila), em `server/_core/index.ts`. Não as mova sem entender o porquê.
-- Sempre rode `pnpm test` antes de entregar. Há testes em `server/*.test.ts`.
+- Sempre rode `npm test` antes de entregar. **119 testes** vitest em `server/*.test.ts`.
 
 ---
 
-## 1. Arquitetura: cérebro + braço
+## 1. Arquitetura
 
-```
-┌─────────────────────────────┐         ┌──────────────────────────────┐
-│        CÉREBRO (app)         │         │       BRAÇO (executor)        │
-│  cyberpost.manus.space       │         │  Tarefa agendada do Manus     │
-│  React + Express + tRPC + DB │         │  (Ter/Qui 8h e 17h) +         │
-│                              │         │  instagram_automation.py      │
-│  - Calendário (banco)        │         │                               │
-│  - Regras de legenda         │◀──token─│  GET  /api/queue/next         │
-│  - Geração de legenda (IA)   │  HTTP   │  POST /api/queue/report       │
-│  - Status dos posts          │────────▶│  POST /api/queue/approval     │
-│  - Cron diário (Heartbeat)   │         │                               │
-│                              │         │  Conectores nativos:          │
-│  NÃO consome créditos Manus  │         │  Google Drive, Instagram,Gmail│
-└─────────────────────────────┘         └──────────────────────────────┘
-```
-
-- **Cérebro** roda no servidor do app (deploy Autoscale, Node-only). Toda a lógica de decisão está aqui.
-- **Braço** é acionado pelo agendamento do Manus apenas nas janelas Ter/Qui. Ele consulta a fila, baixa a arte, posta e reporta de volta.
-- A comunicação entre os dois é via HTTP autenticado por **bearer token** (`QUEUE_API_TOKEN`), **sem sessão de usuário**.
+- Um **worker in-process** (`server/executorWorker.ts`, `setInterval` de 60s) lê o Drive (`server/googleDrive.ts`), publica via Meta Graph API (`server/instagramGraph.ts`) e notifica por e-mail via Resend (`server/email.ts`).
+- Ponte JOBS via `/api/bridge/*` (`server/bridgeApi.ts`) — contrato e contexto em `HANDOFF-BRIDGE.md`.
+- `/api/queue/*` + Heartbeat = **legado dormente**, mantido de propósito como rede de segurança até o P0 (ver `ROADMAP_MELHORIAS.md` 3.2). Não está vivo, mas não remova por ora.
 
 ---
 
@@ -54,21 +39,28 @@ client/src/
 drizzle/
   schema.ts               ← Tabelas e tipos (mudanças exigem migração — ver §7)
 server/
-  _core/                  ← Infra (OAuth, vite, llm, sdk) — não editar sem necessidade
-  _core/index.ts          ← Bootstrap Express + MAPA DE ROTAS (cron/fila/approval aqui)
+  _core/                  ← Infra (oauth Google, vite, sdk, env) — não editar sem necessidade
+  _core/index.ts          ← Bootstrap Express + MAPA DE ROTAS (cron/fila/approval/bridge aqui)
   db.ts                   ← Camada de acesso a dados
   engine.ts               ← REGRAS DE NEGÓCIO (prioridade de legenda) — núcleo
+  executor.ts             ← Publicação de um post (side effects: Drive → Instagram)
+  executorWorker.ts       ← Worker in-process (tick de 60s) que dispara o executor
+  googleDrive.ts          ← Leitura do Drive via Service Account
+  instagramGraph.ts       ← Publicação via Meta Graph API
+  bridgeApi.ts            ← Ponte JOBS (POST /api/bridge/post, GET /api/bridge/status/:id)
+  email.ts                ← Envio de e-mail via Resend
+  llm.ts                  ← LLM via OpenAI (usado por caption.ts)
   caption.ts              ← Geração de legenda por IA
   scheduled.ts            ← Handler do cron diário
-  schedulePost.ts         ← Heartbeat por post (disparo no horário exato)
+  schedulePost.ts         ← triggerAiApprovalFlow (vivo) + caminho Heartbeat (legado dormente)
   approvalHandler.ts      ← Endpoint público GET /api/approval/:postId/:token
-  queueApi.ts             ← Endpoints da fila (next/report/approval)
+  queueApi.ts             ← Endpoints /api/queue/* (LEGADO DORMENTE)
   routers.ts              ← Composição tRPC
   routers/posts.ts        ← CRUD do calendário
-  routers/accounts.ts     ← CRUD de contas Instagram
+  routers/accounts.ts     ← CRUD de contas Instagram + Conexão Meta
   routers/config.ts       ← Settings + logs
-  *.test.ts               ← Testes vitest (41 — mantenha passando)
-instagram_automation.py   ← Executor (roda no ambiente Manus, não no servidor)
+  *.test.ts               ← Testes vitest (119 — mantenha passando)
+instagram_automation.py   ← Executor Python (LEGADO DORMENTE — não roda no servidor)
 DEVELOPER_GUIDE.md        ← Este documento
 ```
 
@@ -118,24 +110,22 @@ Definido em `server/_core/index.ts`:
 
 | Método/Rota | Auth | Função |
 | --- | --- | --- |
-| `POST /api/scheduled/cron30` | Cookie de cron (Heartbeat) | Rotina diária do cérebro (`cron30Handler`) |
-| `POST /api/scheduled/runPost` | Cookie de cron (Heartbeat por post) | Disparo no horário exato — Regra 3 (IA) ou Regras 1+2 (fila) |
+| `POST /api/scheduled/cron30` | Cookie de cron (Heartbeat) | **Legado dormente** — rotina diária do cérebro (`cron30Handler`) |
+| `POST /api/scheduled/runPost` | Cookie de cron (Heartbeat por post) | **Legado dormente** — disparo no horário exato |
 | `GET /api/approval/:postId/:token` | Nenhuma (token na URL) | Aprovação/reprovação de legenda por link no e-mail |
-| `GET /api/queue/next` | Bearer `QUEUE_API_TOKEN` | Entrega a próxima ordem pronta ao executor |
-| `POST /api/queue/report` | Bearer `QUEUE_API_TOKEN` | Executor reporta resultado (posted/missing-image/error) |
-| `POST /api/queue/approval` | Bearer `QUEUE_API_TOKEN` | Registra decisão de aprovação lida do e-mail (legado) |
-| `POST /api/queue/generate-caption` | Bearer `QUEUE_API_TOKEN` | Gera legenda de IA sob demanda e marca Aguardando Aprovação |
+| `POST /api/bridge/post` | Bearer `BRIDGE_API_TOKEN` | Ponte JOBS: cria post já-aprovado com imagem em URL pública |
+| `GET /api/bridge/status/:id` | Bearer `BRIDGE_API_TOKEN` | Ponte JOBS: status/logs de um post |
+| `GET /api/queue/next` | Bearer `QUEUE_API_TOKEN` | **Legado dormente** — próxima ordem pro executor Python |
+| `POST /api/queue/report` | Bearer `QUEUE_API_TOKEN` | **Legado dormente** — callback de resultado do executor Python |
+| `POST /api/queue/approval` | Bearer `QUEUE_API_TOKEN` | **Legado dormente** — decisão de aprovação lida do e-mail |
+| `POST /api/queue/generate-caption` | Bearer `QUEUE_API_TOKEN` | **Legado dormente** — legenda de IA sob demanda |
 | `/api/trpc/*` | Sessão de usuário (admin) | CRUD do calendário, contas, settings, logs, auth |
 
-> **Armadilha comum:** procurar a lógica de cron/fila dentro de `routers.ts`. Ela **não está lá** — está nas rotas Express acima. Se mover essas rotas, o cron e o executor param de funcionar.
+> **Armadilha comum:** procurar a lógica de cron/fila/ponte dentro de `routers.ts`. Ela **não está lá** — está nas rotas Express acima. Se mover essas rotas, o worker e a ponte param de funcionar.
 
-### Contratos da fila (resumo)
+### Contratos da fila (legado dormente)
 
-`GET /api/queue/next` → `{ order: { postId, filename, mediaType, caption, captionKind, driveFolder } }` ou `{ order: null }` ou `{ order: null, blocked: { postId, reason } }`.
-
-`POST /api/queue/report` body → `{ postId: number, result: "posted"|"missing-image"|"error", permalink?, instagramId?, imageUrl?, imageStorageKey?, message? }`.
-
-`POST /api/queue/approval` body → `{ postId: number, reply: string, imageUrl?, imageStorageKey? }`.
+Contratos completos em `server/queueApi.ts`; o contrato da ponte JOBS está em `HANDOFF-BRIDGE.md`.
 
 ---
 
@@ -162,13 +152,10 @@ Outras tabelas: **`users`** (auth + `role` admin/user), **`settings`** (key/valu
 
 ---
 
-## 6. O executor (`instagram_automation.py`)
+## 6. `instagram_automation.py`
 
-- Roda no **ambiente do agendamento Manus**, não no servidor do app.
-- Fluxo: `GET /api/queue/next` → baixa a arte do Drive (`gws`) → `manus-upload-file` → gera `post_cmd_<id>.sh` (comando `manus-mcp-cli create_instagram`) → gera `report_cmd_<id>.sh`.
-- **Por que arquivos `.sh`?** Comandos `manus-mcp-cli` (MCP) **devem** ser executados como comandos shell de topo pelo agente Manus, não dentro de subprocessos Python. Por isso o script os prepara e o agente os executa. Não tente chamar MCP de dentro do Python.
-- Variáveis: `QUEUE_API_BASE` (padrão `https://cyberpost.manus.space`), `QUEUE_API_TOKEN` (obrigatória), `CYBERSECCAST_FOLDER_ID`.
-- Após postar, o agente substitui `PERMALINK_AQUI` pelo link real e executa o `report_cmd`. Isso é um ponto de confirmação humano/agente intencional.
+Script legado do ambiente Manus, **dormente**; não roda no servidor.
+Rede de segurança até o P0 (ver §1 e ROADMAP 3.2).
 
 ---
 
@@ -176,9 +163,8 @@ Outras tabelas: **`users`** (auth + `role` admin/user), **`settings`** (key/valu
 
 ### Mudança de schema (Drizzle)
 1. Edite `drizzle/schema.ts`.
-2. `pnpm drizzle-kit generate` (gera o `.sql`).
-3. Leia o `.sql` gerado e aplique no banco (no ambiente Manus, via ferramenta de SQL; fora dele, aplique a migração no seu MySQL/TiDB).
-4. Mantenha schema e banco em sincronia. **Cuidado com comandos destrutivos** — dados não são recuperáveis.
+2. `npm run db:push` (drizzle-kit generate + migrate contra o MySQL do Railway) — passo **manual**, migrações NÃO rodam no boot.
+3. Leia o `.sql` gerado antes de aplicar. Mantenha schema e banco em sincronia. **Cuidado com comandos destrutivos** — dados não são recuperáveis.
 
 ### Mudança de frontend
 - Reutilize componentes `shadcn/ui` em `client/src/components/ui`. Não reescreva do zero.
@@ -194,30 +180,37 @@ Outras tabelas: **`users`** (auth + `role` admin/user), **`settings`** (key/valu
 ## 8. Rodar localmente / testar
 
 ```bash
-pnpm install
-pnpm test          # vitest — DEVE passar antes de qualquer entrega
-pnpm dev           # sobe o servidor de desenvolvimento (Vite + Express)
+npm install
+npm test           # vitest (119 testes) — DEVE passar antes de qualquer entrega
+npm run build      # vite + esbuild
+npm run dev        # sobe o servidor de desenvolvimento (Vite + Express)
 ```
 
+- `pnpm` não está no PATH desta máquina — use `npm run` (que resolve os binários de `node_modules/.bin`).
 - O servidor escolhe a porta por `process.env.PORT` (não hardcode porta).
-- Testes existentes: `server/engine.test.ts` (regras de legenda), `server/queueApi.test.ts` (auth do token), `server/auth.logout.test.ts`. Ao mudar regras de negócio, **atualize/adicione testes**.
+- Ao mudar regras de negócio, **atualize/adicione testes** em `server/*.test.ts`.
 
 ---
 
 ## 9. Variáveis de ambiente / segredos
 
-Injetadas pela plataforma (não commitar `.env`):
+Setadas no Railway (não commitar `.env`). Lista canônica + passo a passo do que falta: **`HANDOFF-BRIDGE.md` §"Chaves que o Beto precisa setar"**. Resumo:
 
 | Variável | Uso |
 | --- | --- |
-| `DATABASE_URL` | Conexão MySQL/TiDB |
+| `DATABASE_URL` | Conexão MySQL do Railway |
 | `JWT_SECRET` | Assinatura do cookie de sessão |
-| `QUEUE_API_TOKEN` | Bearer token app ↔ executor (`/api/queue/*`) |
-| `PUBLIC_BASE_URL` | URL pública do app (ex: `https://cyberpost.manus.space`) — usada nos links de aprovação por e-mail |
-| `VITE_APP_ID`, `OAUTH_SERVER_URL`, `VITE_OAUTH_PORTAL_URL` | Manus OAuth |
-| `BUILT_IN_FORGE_API_URL` / `BUILT_IN_FORGE_API_KEY` | APIs internas Manus (LLM, storage) |
+| `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` / `VITE_GOOGLE_CLIENT_ID` | Login Google |
+| `EMAIL_OWNER` | Único e-mail que loga + destinatário de notificações |
+| `OPENAI_API_KEY` (+ `LLM_MODEL` opcional) | Legenda de IA |
+| `RESEND_API_KEY` + `EMAIL_FROM` | E-mail (notificações + aprovação) |
+| `GOOGLE_SA_JSON` + `DRIVE_FOLDER_ID` | Drive via Service Account (fluxo por filename) |
+| `BRIDGE_API_TOKEN` | Bearer token da ponte JOBS (`/api/bridge/*`) |
+| `ALLOWED_IMAGE_HOSTS` (opcional) | Allowlist de hosts de imagem da ponte |
+| `PUBLIC_BASE_URL` | URL pública do app — links de aprovação por e-mail |
+| `QUEUE_API_TOKEN` | Legado dormente (`/api/queue/*`) |
 
-> Se mudar o `QUEUE_API_TOKEN`, atualize-o **dos dois lados**: no segredo do app e na variável do agendamento do executor. Caso contrário a fila retorna `401`.
+> Se mudar o `BRIDGE_API_TOKEN`, atualize-o **dos dois lados**: no Railway e no `_Jobs/config/config.json`. Caso contrário a ponte retorna `401`.
 
 ---
 
@@ -227,10 +220,8 @@ Injetadas pela plataforma (não commitar `.env`):
 - **NÃO** mova as rotas `/api/scheduled/*` e `/api/queue/*` para dentro do tRPC.
 - **NÃO** altere as strings literais de `status` sem varrer todo o código.
 - **NÃO** faça o executor publicar legenda de IA sem `captionApproved=true`.
-- **NÃO** chame `manus-mcp-cli` dentro de subprocessos Python; gere `.sh` para o agente executar.
 - **NÃO** publique conteúdo de usuário falso (reviews/ratings) — política de conteúdo.
-- **NÃO** use `git reset --hard`; no ambiente Manus, use os checkpoints do webdev.
-- **FAÇA** `pnpm test` antes de entregar.
+- **FAÇA** `npm test` antes de entregar.
 - **FAÇA** mudanças de horário sempre em UTC no backend; converta para Brasília só na UI.
 - **FAÇA** logs em `activity_logs` para qualquer nova ação relevante (observabilidade).
 
@@ -240,8 +231,8 @@ Injetadas pela plataforma (não commitar `.env`):
 
 - Tudo persistido como **unix ms em UTC**.
 - Cron do cérebro: **11:00 UTC = 08:00 América/São_Paulo** (1x/dia).
-- Executor: **Ter e Qui, 8h e 17h (América/São_Paulo)**.
+- O worker in-process roda em tick de **60s** e publica quando `scheduledAt <= now`.
 
 ---
 
-*Fiel ao código na versão atual do repositório (41 testes vitest).*
+*Fiel ao código na versão atual do repositório (119 testes vitest).*

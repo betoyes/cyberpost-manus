@@ -1,13 +1,12 @@
 # Roadmap de Melhorias e Evolução
 
 > Gerado a partir de uma análise completa do código em 2026-07-01 (pós-migração de
-> independência da Manus — ver `INDEPENDENCIA_MANUS_STATUS.md`). Cada item traz o
-> problema, a solução proposta e os arquivos envolvidos, para ser desenvolvido
-> futuramente sem precisar redescobrir o contexto.
+> independência da Manus — histórico em `arquivo/INDEPENDENCIA_MANUS_STATUS.md`).
+> Cada item traz o problema, a solução proposta e os arquivos envolvidos, para ser
+> desenvolvido futuramente sem precisar redescobrir o contexto.
 >
-> Convenções: prioridades **P0** (bloqueante) → **P3** (desejável). Marcar itens
-> concluídos com data e commit. Não confundir com `todo.md`, que é o checklist
-> histórico do que já foi construído.
+> Convenções: prioridades **P0** (bloqueante) → **P2** (desejável). Marcar itens
+> concluídos com data e commit.
 
 ## Visão geral do estado atual
 
@@ -19,22 +18,14 @@ Pontos fortes que devem ser preservados em qualquer mudança:
   sem aprovação por e-mail).
 - Segurança: token Meta nunca ecoado ao client (`getSettingMeta`), `ownerProcedure`,
   mensagens de erro sanitizadas em `testInstagramConnection`.
-- 103 testes passando, `tsc --noEmit` e build limpos.
+- 119 testes passando, `tsc --noEmit` e build limpos.
 
 ---
 
 ## P0 — Terminar a migração (pré-requisito de tudo)
 
-**Status: pendente de credenciais.** O executor novo está publicado mas nunca rodou
-de ponta a ponta. Passo a passo completo em `INDEPENDENCIA_MANUS_STATUS.md`
-("Passo a passo pendente do dono").
-
-- [ ] Setar no Railway: `OPENAI_API_KEY`, `RESEND_API_KEY`, `GOOGLE_SA_JSON`,
-      `DRIVE_FOLDER_ID`; confirmar `PUBLIC_BASE_URL`.
-- [ ] Configurar token Meta + `igUserId` pela tela `/accounts` e testar conexão.
-- [ ] Publicação real de teste (legenda manual + imagem no Drive) → status "Postado"
-      com permalink.
-- [ ] Só então desativar executor Python + Heartbeat do lado da Manus.
+**P0 = credenciais + teste ponta a ponta** — pendente.
+Checklist canônico em `HANDOFF-BRIDGE.md` §"Chaves que o Beto precisa setar".
 
 ---
 
@@ -146,7 +137,7 @@ query Drizzle. Aproveitar e criar índice em (`status`, `scheduledAt`).
 ### 3.1 Migrar storage de imagens do Forge/S3 da Manus
 
 **Problema:** decisão consciente na migração (ver
-`INDEPENDENCIA_MANUS_STATUS.md`), mas é a **última dependência**: se a Manus
+`arquivo/INDEPENDENCIA_MANUS_STATUS.md`), mas é a **última dependência**: se a Manus
 desligar, a URL pública da imagem quebra e a publicação para
 (`server/storage.ts` + `server/_core/storageProxy.ts`).
 
@@ -260,33 +251,14 @@ requer decisão explícita do dono sobre a regra de negócio nº 4.
 
 ---
 
-## P3 — Higiene técnica
-
-- **Logger estruturado** (ex.: `pino`) no lugar de `console.log/warn/error` —
-  facilita filtrar logs no Railway. Arquivos: todo o `server/`.
-- **Pool MySQL configurado** em `server/db.ts` (`getDb` cria conexão sem
-  pool/timeout explícitos — conferir defaults do `mysql2`).
-- **Rate limiting** nos endpoints públicos (`/api/queue/*` enquanto existirem,
-  handler de aprovação) — higiene, o token de aprovação de 32 bytes já é forte.
-- **Índices**: (`status`, `scheduledAt`) em `posts` (junto com 2.3);
-  `approvalToken` é lookup frequente — conferir se é indexado.
-
----
-
 ## Sequência recomendada
 
-1. **P0** — credenciais + teste de ponta a ponta.
-2. **P1 confiabilidade** (1.1 → 1.2 → 1.3) — pequenos e protegem o teste do P0.
-3. **P1 operação** (2.1 → 2.2 → 2.3).
-4. **P2 limpeza** (3.1 → 3.2) — só após o legado da Manus estar desativado.
-5. **P2 produto** na ordem 4.1 → 4.7 (ou conforme prioridade do dono).
-6. **P3** oportunisticamente, junto com os itens acima.
+**P0** → **P1 confiabilidade** (1.1 → 1.3) → **P1 operação** (2.1 → 2.3) → **P2 limpeza** (3.1 → 3.2, só após o legado da Manus estar desativado) → **P2 produto** (4.1 → 4.7, ou conforme prioridade do dono).
 
 ## Regras para o desenvolvimento destes itens
 
 - Respeitar as regras de negócio invioláveis de `.claude/CLAUDE.md` (aprovação de
   IA, timezone `America/Sao_Paulo`, strings de status exatas).
-- Testes primeiro (o projeto está com 103/103 verdes — manter).
-- Registrar cada mudança em `CHANGELOG_COLABORACAO.md` antes do commit.
+- Testes primeiro (o projeto está com 119/119 verdes — manter).
 - Itens marcados com **"exige migração de banco"**: rodar `npm run db:push` e
   validar em produção com cautela.
