@@ -1,7 +1,48 @@
 # HANDOFF — Postador (publisher do ecossistema) + ponte JOBS
 
 > Ponto de partida pra continuar numa janela nova SEM reprocessar a conversa
-> antiga. Leia este arquivo. Escrito 2026-07-09.
+> antiga. Leia este arquivo. Escrito 2026-07-09, **atualizado 2026-07-10**.
+
+## ✅ ESTADO ATUAL (2026-07-10): PUBLICANDO DE VERDADE
+
+A cadeia inteira foi provada ponta a ponta — post real publicado no feed do
+CybersecCAST: `https://www.instagram.com/p/Dal8M1MmkBK/`. Fluxo que FUNCIONA:
+
+```
+Artista (arte local) → JOBS voz/postador.py (BYTES da arte, base64)
+  → POST /api/bridge/post (auth BRIDGE_API_TOKEN)
+    → Postador hospeda a imagem no CLOUDFLARE R2 (server/r2.ts) → URL pública r2.dev
+      → publica via graph.INSTAGRAM.com (Instagram Login API, server/instagramGraph.ts)
+        → espera container status_code=FINISHED → media_publish → permalink
+```
+
+**Descobertas que corrigem suposições antigas deste doc (LEIA antes de mexer):**
+- **NÃO é `graph.facebook.com`.** O app Meta "Cyberpost Manus" é do tipo **Instagram
+  Login** (permissões `instagram_business_*`), sem vínculo com Página do Facebook. O
+  publisher usa **`graph.instagram.com/v21.0`**. Token = **Instagram User token** gerado
+  no painel do app (Casos de uso → API do Instagram → "Configuração da API com login do
+  Instagram" → seção 2 "Gerar tokens" → Gerar token na conta conectada). NÃO é token do
+  Graph API Explorer/Facebook.
+- **NÃO é o Forge/S3 da Manus.** O Forge está morto no Railway (`BUILT_IN_FORGE_*`
+  ausentes) — dava "Storage config missing". Hospedagem hoje = **Cloudflare R2** (bucket
+  `postador-media`, S3 via `@aws-sdk/client-s3`, servido pela URL pública r2.dev). Env:
+  `R2_ACCOUNT_ID/ACCESS_KEY_ID/SECRET_ACCESS_KEY/BUCKET/PUBLIC_BASE_URL`.
+- **A ponte aceita `imageBase64`** (os bytes da arte) além de `imageUrl` — o Postador
+  hospeda no R2 e publica. É a Fase 3 fechada: JOBS/Artista entregam a arte, o Postador
+  é o host.
+- **`media_publish` precisa esperar o container FINISHED** — publicar na hora dá "Media
+  ID is not available" (o IG baixa/processa a imagem assíncrono). Resolvido com poll de
+  `status_code` em `instagramGraph.ts`.
+
+**Pegadinhas / resíduos conhecidos:**
+- **r2.dev tem propagação**: numa imagem INÉDITA, o r2.dev pode levar segundos pra servir;
+  se o executor publicar antes, o container vai a ERROR (mensagem clara, post "Fluxo
+  Parado", re-disparável — não é perda silenciosa). Hardening opcional: HEAD-check da URL
+  no bridge antes de criar o post. r2.dev é oficialmente "não pra produção" → migrar pra
+  domínio custom no R2 é o passo durável.
+- **Multi-conta**: `meta_access_token` é UM setting global; cada conta tem seu `igUserId`.
+  Com Instagram Login, um token é escopado a UMA conta IG. Publicar em várias contas com
+  tokens diferentes exigiria token por conta (hoje o modelo é 1 token global).
 
 ## O que é o Postador
 
@@ -84,37 +125,34 @@ espelhando `avatar.py`/`social.py`:
 `postar()` devolve `nao_configurado`. A imagem (URL pública) hoje entra manual; o
 encadeamento automático arte→post é a Fase 3.
 
-## Fase 3 — aposentar o Instagram do Artista
+## Fase 3 — CONCLUÍDA no essencial (arte → R2 → publica)
 
-Em `_Claude-Code/Artista`: tirar o passo de publish de `_scripts/utils/agendador.js` +
-`instagram.js`; a Artista para em "arte + URL pública" e entrega pro Postador. Atualizar
-`Artista/CLAUDE.md`. (As vars IG do Artista já estão inativas nesta máquina.)
+O núcleo está feito: a ponte aceita os BYTES da arte (`imageBase64`), o Postador hospeda
+no R2 e publica (commits `1e13661` bytes, `081c9d4` R2, `6c4c67b` graph.instagram,
+`d06c65b` poll de container). **Resta só** aposentar o código de Instagram DENTRO do
+Artista (`_scripts/utils/agendador.js` + `instagram.js`) — a Artista já não publica nesta
+máquina (vars IG inativas), então é limpeza, não bloqueio. Atualizar `Artista/CLAUDE.md`
+quando fizer.
 
-## ⚠️ Chaves que o Beto precisa setar pro Postador publicar de verdade
+## Chaves / env — o que está SETADO (2026-07-10) e o que falta
 
-Hoje o Postador está *"falta credenciais"*. Este é o **checklist canônico do P0**:
-1. `BRIDGE_API_TOKEN` — gerar (`openssl rand -hex 32`), colar no **Railway** (env) E no
-   `_Jobs/config/config.json`. Têm que ser IDÊNTICOS.
-2. `OPENAI_API_KEY` (gerar em platform.openai.com) — geração de legenda de IA.
-   Opcional: `LLM_MODEL` (default `gpt-4o-mini`).
-3. `RESEND_API_KEY` (gerar em resend.com) + `EMAIL_FROM` — e-mail de notificação/aprovação.
-4. `meta_access_token` + `igUserId` — no painel `/accounts` do app (tela "Conexão Meta"),
-   e rodar "Testar conexão".
-5. `PUBLIC_BASE_URL` no Railway — confirmar que está setada (links de aprovação por e-mail
-   e Instagram precisam).
-6. (opcional, defense-in-depth) `ALLOWED_IMAGE_HOSTS` no Railway = host do CDN da Artista.
-7. Google Drive (`GOOGLE_SA_JSON` + `DRIVE_FOLDER_ID`) só é necessário pro fluxo LEGADO
-   (posts por filename). Posts vindos da ponte (URL externa) NÃO precisam do Drive.
-   Se for ativar: Google Cloud → IAM → Service Accounts → criar uma nova, habilitar a
-   Drive API, baixar a chave JSON, compartilhar a pasta `CybersecCAST` do Drive com o
-   e-mail da service account; setar `GOOGLE_SA_JSON` (o JSON) + `DRIVE_FOLDER_ID` (o **ID**
-   da pasta, não o nome) no Railway.
+Já configurado e funcionando (Railway + `_Jobs/config/config.json`):
+- ✅ `BRIDGE_API_TOKEN` — no Railway E no config do JOBS (idênticos).
+- ✅ **R2** — `R2_ACCOUNT_ID`, `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`,
+  `R2_BUCKET=postador-media`, `R2_PUBLIC_BASE_URL=https://pub-695e...r2.dev` (Railway).
+- ✅ `meta_access_token` (Instagram User token) + `igUserId` (17841431858411620) —
+  setados no painel `/accounts`, "Testar conexão Meta" verde.
+- ✅ `PUBLIC_BASE_URL` no Railway.
 
-**Passo a passo pendente do dono (sequência de validação):** setar as chaves acima →
-testar geração de legenda + e-mail de aprovação → "Testar conexão Meta" em `/accounts` →
-publicação real de teste (legenda manual + imagem) e conferir que vira "Postado" com
-permalink → só depois de tudo confirmado, desativar manualmente o executor Python +
-Heartbeat do lado da Manus (não é código deste repo).
+Ainda não setado (não bloqueia a publicação por imagem, mas limita features):
+- `OPENAI_API_KEY` (+ `LLM_MODEL`) — só pra GERAÇÃO de legenda por IA no app. A ponte JOBS
+  manda a legenda pronta, então não precisa pra o fluxo JOBS→post.
+- `RESEND_API_KEY` + `EMAIL_FROM` — e-mail de aprovação/notificação (posts da ponte já
+  vêm aprovados, `captionApproved:true`, então não passam por e-mail).
+- Google Drive (`GOOGLE_SA_JSON` + `DRIVE_FOLDER_ID`) — só pro fluxo LEGADO por `filename`.
+  A ponte NÃO usa Drive nem R2-via-Drive; hospeda direto no R2.
 
-Nota: o storage de imagens segue no Forge/S3 da Manus **de propósito** (última
-dependência — ROADMAP 3.1).
+**⚠️ Renovar o token do Meta:** o Instagram User token é long-lived (~60 dias). Quando
+expirar, gerar de novo no painel do app (Casos de uso → API do Instagram → seção "Gerar
+tokens") e colar em `/accounts` → Salvar → Testar. Sinal de expiração nos logs:
+"Invalid OAuth access token" / "Object ... does not exist".
