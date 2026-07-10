@@ -30,6 +30,60 @@ async function graphPost(
   return data;
 }
 
+async function graphGet(
+  path: string,
+  params: Record<string, string>
+): Promise<Record<string, unknown>> {
+  const url = new URL(`${GRAPH_API_BASE}/${path}`);
+  for (const [k, v] of Object.entries(params)) url.searchParams.set(k, v);
+  const response = await fetch(url);
+  const data = (await response.json()) as Record<string, unknown>;
+  if (!response.ok) {
+    const message =
+      (data?.error as { message?: string } | undefined)?.message ??
+      response.statusText;
+    throw new Error(
+      `Instagram Graph API error (${response.status}): ${message}`
+    );
+  }
+  return data;
+}
+
+const CONTAINER_POLL_ATTEMPTS = 20;
+const CONTAINER_POLL_INTERVAL_MS = 3000;
+
+/**
+ * O Instagram baixa e processa a imagem de forma ASSÍNCRONA depois que o container
+ * é criado (`{ig}/media`). Chamar `media_publish` antes de o container estar
+ * FINISHED dá "Media ID is not available". Aqui a gente espera o `status_code`
+ * virar FINISHED (ou aborta em ERROR / timeout com mensagem clara).
+ */
+async function waitForContainerReady(
+  creationId: string,
+  accessToken: string
+): Promise<void> {
+  for (let attempt = 0; attempt < CONTAINER_POLL_ATTEMPTS; attempt++) {
+    const status = await graphGet(creationId, {
+      fields: "status_code",
+      access_token: accessToken,
+    });
+    const code = status.status_code as string | undefined;
+    if (code === "FINISHED") return;
+    if (code === "ERROR") {
+      throw new Error(
+        "Instagram não conseguiu processar a imagem (container ERROR) — " +
+          "confira se a URL da imagem é http(s) pública e acessível."
+      );
+    }
+    await new Promise((resolve) =>
+      setTimeout(resolve, CONTAINER_POLL_INTERVAL_MS)
+    );
+  }
+  throw new Error(
+    "O container do Instagram não ficou pronto a tempo (status_code != FINISHED)."
+  );
+}
+
 /**
  * Own Instagram publisher (Meta Graph API). Replaces the Manus Python
  * executor's publish step — see HANDOFF_INDEPENDENCIA_MANUS.md §2.2.
@@ -51,6 +105,9 @@ export async function publishImageToInstagram(params: {
   const creationId = creation.id as string | undefined;
   if (!creationId)
     throw new Error("Instagram media creation did not return an id");
+
+  // Espera o Instagram terminar de baixar/processar a imagem antes de publicar.
+  await waitForContainerReady(creationId, accessToken);
 
   const published = await graphPost(`${igUserId}/media_publish`, {
     creation_id: creationId,

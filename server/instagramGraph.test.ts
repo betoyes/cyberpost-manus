@@ -21,6 +21,10 @@ describe("publishImageToInstagram", () => {
       })
       .mockResolvedValueOnce({
         ok: true,
+        json: async () => ({ status_code: "FINISHED" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
         json: async () => ({ id: "media-1" }),
       })
       .mockResolvedValueOnce({
@@ -39,7 +43,7 @@ describe("publishImageToInstagram", () => {
       mediaId: "media-1",
       permalink: "https://instagram.com/p/xyz",
     });
-    expect(mockFetch).toHaveBeenCalledTimes(3);
+    expect(mockFetch).toHaveBeenCalledTimes(4);
   });
 
   it("throws when media creation fails", async () => {
@@ -67,6 +71,10 @@ describe("publishImageToInstagram", () => {
         json: async () => ({ id: "creation-1" }),
       })
       .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status_code: "FINISHED" }),
+      })
+      .mockResolvedValueOnce({
         ok: false,
         status: 500,
         statusText: "Server Error",
@@ -88,6 +96,10 @@ describe("publishImageToInstagram", () => {
       .mockResolvedValueOnce({
         ok: true,
         json: async () => ({ id: "creation-1" }),
+      })
+      .mockResolvedValueOnce({
+        ok: true,
+        json: async () => ({ status_code: "FINISHED" }),
       })
       .mockResolvedValueOnce({
         ok: true,
