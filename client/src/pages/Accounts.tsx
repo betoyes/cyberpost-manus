@@ -46,6 +46,7 @@ export default function Accounts() {
   const accounts = trpc.accounts.list.useQuery();
   const [open, setOpen] = useState(false);
   const [form, setForm] = useState<FormState>(EMPTY);
+  const [accountToken, setAccountToken] = useState("");
 
   const createMut = trpc.accounts.create.useMutation({
     onSuccess: () => {
@@ -75,6 +76,10 @@ export default function Accounts() {
       utils.accounts.list.invalidate();
       toast.success("Conta padrão definida");
     },
+    onError: e => toast.error(e.message),
+  });
+  const saveAccountTokenMut = trpc.accounts.saveAccountToken.useMutation({
+    onSuccess: () => toast.success("Token da conta salvo"),
     onError: e => toast.error(e.message),
   });
 
@@ -120,6 +125,7 @@ export default function Accounts() {
 
   function openCreate() {
     setForm(EMPTY);
+    setAccountToken("");
     setOpen(true);
   }
   function openEdit(a: (typeof list)[number]) {
@@ -129,6 +135,7 @@ export default function Accounts() {
       handle: a.handle ?? "",
       igUserId: a.igUserId ?? "",
     });
+    setAccountToken("");
     setOpen(true);
   }
 
@@ -146,6 +153,13 @@ export default function Accounts() {
       updateMut.mutate({ id: form.id, ...payload });
     } else {
       createMut.mutate(payload);
+    }
+    // Token por conta (opcional): só salva se colaram algo e há igUserId.
+    if (accountToken.trim() && form.igUserId.trim()) {
+      saveAccountTokenMut.mutate({
+        igUserId: form.igUserId.trim(),
+        token: accountToken.trim(),
+      });
     }
   }
 
@@ -396,6 +410,25 @@ export default function Accounts() {
                 value={form.igUserId}
                 onChange={e => setForm({ ...form, igUserId: e.target.value })}
               />
+            </div>
+            <div className="space-y-1.5">
+              <Label>
+                Token desta conta{" "}
+                <span className="text-xs text-muted-foreground">
+                  (Instagram User token — pra ESTA conta publicar)
+                </span>
+              </Label>
+              <Input
+                type="password"
+                autoComplete="off"
+                placeholder="Cole o token do Instagram desta conta"
+                value={accountToken}
+                onChange={e => setAccountToken(e.target.value)}
+              />
+              <p className="text-xs text-muted-foreground">
+                Cada conta tem seu token (Instagram Login). Em branco = usa o token
+                global. Só é salvo se você colar algo aqui.
+              </p>
             </div>
           </div>
           <DialogFooter>

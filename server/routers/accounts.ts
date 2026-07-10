@@ -89,6 +89,28 @@ export const accountsRouter = router({
       return { ok: true };
     }),
 
+  /**
+   * Owner-only: persist a PER-ACCOUNT Meta token, chaveado por igUserId
+   * (`meta_token:<igUserId>`). O executor prefere este ao token global — é o que
+   * permite várias contas IG publicarem, cada uma com seu token (Instagram Login).
+   */
+  saveAccountToken: ownerProcedure
+    .input(
+      z.object({
+        igUserId: z.string().trim().min(1, "IG User ID é obrigatório"),
+        token: z.string().trim().min(1, "Token não pode ser vazio"),
+      })
+    )
+    .mutation(async ({ input }) => {
+      await db.setSetting(`meta_token:${input.igUserId}`, input.token);
+      await db.addLog({
+        postId: null,
+        kind: "config",
+        message: `Token do Meta salvo para a conta ${input.igUserId}.`,
+      });
+      return { ok: true };
+    }),
+
   /** Owner-only: remove the saved Meta access token. */
   removeMetaToken: ownerProcedure.mutation(async () => {
     await db.deleteSetting(META_TOKEN_KEY);

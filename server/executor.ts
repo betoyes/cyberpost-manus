@@ -64,7 +64,14 @@ export async function runExecutionForPost(postId: number): Promise<void> {
     return;
   }
 
-  const metaToken = await db.getSetting("meta_access_token");
+  // Token POR CONTA (`meta_token:<igUserId>`) tem prioridade; cai no token global
+  // (`meta_access_token`) se a conta não tiver o seu. Necessário no multi-conta:
+  // com Instagram Login, cada conta IG tem seu próprio token (um token não publica
+  // em várias contas). Assim CybersecCAST e Sunny publicam sem um derrubar o outro.
+  const metaToken =
+    (account.igUserId
+      ? await db.getSetting(`meta_token:${account.igUserId}`)
+      : null) || (await db.getSetting("meta_access_token"));
   if (!metaToken) {
     await db.updatePost(postId, {
       status: "Fluxo Parado",
