@@ -239,6 +239,7 @@ export type ResolvedAccount = {
   name: string;
   handle: string | null;
   igUserId: string | null;
+  platform: "instagram" | "linkedin";
 };
 
 /**
@@ -259,6 +260,7 @@ export async function resolvePostAccount(
           name: acc.name,
           handle: acc.handle ?? null,
           igUserId: acc.igUserId ?? null,
+          platform: acc.platform,
         };
       }
     }
@@ -269,6 +271,7 @@ export async function resolvePostAccount(
         name: def.name,
         handle: def.handle ?? null,
         igUserId: def.igUserId ?? null,
+        platform: def.platform,
       };
     }
   } catch {

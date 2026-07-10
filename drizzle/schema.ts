@@ -16,8 +16,12 @@ export const accounts = mysqlTable("accounts", {
   id: int("id").autoincrement().primaryKey(),
   name: varchar("name", { length: 128 }).notNull(),
   handle: varchar("handle", { length: 128 }),
+  // Instagram: IG User ID (17841...). LinkedIn: id numérico da organização (Company
+  // Page) — o publisher monta a URN `urn:li:organization:<id>` a partir daqui.
   igUserId: varchar("igUserId", { length: 128 }),
-  platform: mysqlEnum("platform", ["instagram"]).default("instagram").notNull(),
+  platform: mysqlEnum("platform", ["instagram", "linkedin"])
+    .default("instagram")
+    .notNull(),
   isDefault: boolean("isDefault").default(false).notNull(),
   active: boolean("active").default(true).notNull(),
   createdAt: timestamp("createdAt").defaultNow().notNull(),

@@ -13,7 +13,9 @@ export const accountsRouter = router({
       z.object({
         name: z.string().min(1),
         handle: z.string().optional(),
+        // Instagram: IG User ID. LinkedIn: id numérico da organização (Company Page).
         igUserId: z.string().optional(),
+        platform: z.enum(["instagram", "linkedin"]).optional(),
         isDefault: z.boolean().optional(),
       })
     )
@@ -22,7 +24,7 @@ export const accountsRouter = router({
         name: input.name,
         handle: input.handle ?? null,
         igUserId: input.igUserId ?? null,
-        platform: "instagram",
+        platform: input.platform ?? "instagram",
         isDefault: input.isDefault ?? false,
         active: true,
       });
@@ -99,14 +101,23 @@ export const accountsRouter = router({
       z.object({
         igUserId: z.string().trim().min(1, "IG User ID é obrigatório"),
         token: z.string().trim().min(1, "Token não pode ser vazio"),
+        // Instagram grava em `meta_token:<id>`; LinkedIn em `linkedin_token:<orgId>`
+        // — chaves separadas, lidas pelo executor conforme a plataforma da conta.
+        platform: z.enum(["instagram", "linkedin"]).optional(),
       })
     )
     .mutation(async ({ input }) => {
-      await db.setSetting(`meta_token:${input.igUserId}`, input.token);
+      const isLinkedIn = input.platform === "linkedin";
+      const key = isLinkedIn
+        ? `linkedin_token:${input.igUserId}`
+        : `meta_token:${input.igUserId}`;
+      await db.setSetting(key, input.token);
       await db.addLog({
         postId: null,
         kind: "config",
-        message: `Token do Meta salvo para a conta ${input.igUserId}.`,
+        message: `Token do ${
+          isLinkedIn ? "LinkedIn" : "Meta"
+        } salvo para a conta ${input.igUserId}.`,
       });
       return { ok: true };
     }),

@@ -5,7 +5,70 @@ import { resolveCaption } from "./engine";
 import { triggerAiApprovalFlow } from "./schedulePost";
 import { downloadDriveImage } from "./googleDrive";
 import { publishImageToInstagram } from "./instagramGraph";
+import { publishImageToLinkedIn } from "./linkedinApi";
 import { storagePut } from "./storage";
+import type { ResolvedAccount } from "./db";
+
+/** Rótulo humano da plataforma da conta, pras mensagens de erro/notificação. */
+function platformLabel(account: ResolvedAccount): string {
+  return account.platform === "linkedin" ? "LinkedIn" : "Instagram";
+}
+
+/**
+ * Token da conta, por plataforma. Instagram: token por-conta `meta_token:<igUserId>`
+ * (cai no global `meta_access_token`). LinkedIn: token do admin da Página
+ * `linkedin_token:<orgId>` (sem global — cada organização tem o seu). Um token não
+ * serve pra duas contas, então cada conta guarda o seu.
+ */
+async function resolveAccountToken(
+  account: ResolvedAccount
+): Promise<string | null> {
+  if (account.platform === "linkedin") {
+    return account.igUserId
+      ? await db.getSetting(`linkedin_token:${account.igUserId}`)
+      : null;
+  }
+  return (
+    (account.igUserId
+      ? await db.getSetting(`meta_token:${account.igUserId}`)
+      : null) || (await db.getSetting("meta_access_token"))
+  );
+}
+
+/**
+ * Publica na plataforma certa da conta e normaliza o retorno pro mesmo formato
+ * (`mediaId` guarda o id/URN do post; `permalink` o link público). Centraliza o
+ * ÚNICO ponto que diverge entre Instagram e LinkedIn.
+ */
+async function publishForAccount(
+  account: ResolvedAccount,
+  accessToken: string,
+  imageUrl: string,
+  caption: string
+): Promise<{ mediaId: string; permalink: string | null }> {
+  if (account.platform === "linkedin") {
+    if (!account.igUserId) {
+      throw new Error("Conta LinkedIn sem Organization ID configurado.");
+    }
+    const result = await publishImageToLinkedIn({
+      orgId: account.igUserId,
+      imageUrl,
+      caption,
+      accessToken,
+    });
+    return { mediaId: result.postUrn, permalink: result.permalink };
+  }
+  if (!account.igUserId) {
+    throw new Error("Conta Instagram sem IG User ID configurado.");
+  }
+  const result = await publishImageToInstagram({
+    igUserId: account.igUserId,
+    imageUrl,
+    caption,
+    accessToken,
+  });
+  return { mediaId: result.mediaId, permalink: result.permalink };
+}
 
 /**
  * A bridge-sourced post carries its image as an absolute public http(s) URL in
@@ -64,27 +127,25 @@ export async function runExecutionForPost(postId: number): Promise<void> {
     return;
   }
 
-  // Token POR CONTA (`meta_token:<igUserId>`) tem prioridade; cai no token global
-  // (`meta_access_token`) se a conta não tiver o seu. Necessário no multi-conta:
-  // com Instagram Login, cada conta IG tem seu próprio token (um token não publica
-  // em várias contas). Assim CybersecCAST e Sunny publicam sem um derrubar o outro.
-  const metaToken =
-    (account.igUserId
-      ? await db.getSetting(`meta_token:${account.igUserId}`)
-      : null) || (await db.getSetting("meta_access_token"));
-  if (!metaToken) {
+  // Token POR CONTA e POR PLATAFORMA. Instagram: `meta_token:<igUserId>` (cai no
+  // global `meta_access_token`). LinkedIn: `linkedin_token:<orgId>`. Necessário no
+  // multi-conta: cada conta tem seu próprio token (um token não publica em várias),
+  // então CybersecCAST, Sunny e a Company Page do LinkedIn publicam sem se derrubar.
+  const accessToken = await resolveAccountToken(account);
+  if (!accessToken) {
+    const label = platformLabel(account);
     await db.updatePost(postId, {
       status: "Fluxo Parado",
-      note: "Token do Meta não configurado (ver tela de Contas Instagram).",
+      note: `Token do ${label} não configurado (ver tela de Contas).`,
     });
     await db.addLog({
       postId,
       kind: "error",
-      message: `Token do Meta não configurado para "${post.filename}". Fluxo parado.`,
+      message: `Token do ${label} não configurado para "${post.filename}". Fluxo parado.`,
     });
     await notifyOwner({
-      title: "CybersecCAST: token Meta ausente",
-      content: `"${post.filename}" não pôde ser publicado: token do Meta não configurado.`,
+      title: `CybersecCAST: token ${label} ausente`,
+      content: `"${post.filename}" não pôde ser publicado: token do ${label} não configurado.`,
     });
     return;
   }
@@ -93,12 +154,12 @@ export async function runExecutionForPost(postId: number): Promise<void> {
   // it straight from there and skip Google Drive entirely.
   if (isExternalSourceUrl(post.imageUrl)) {
     try {
-      const result = await publishImageToInstagram({
-        igUserId: account.igUserId,
-        imageUrl: post.imageUrl,
-        caption: cap.caption,
-        accessToken: metaToken,
-      });
+      const result = await publishForAccount(
+        account,
+        accessToken,
+        post.imageUrl,
+        cap.caption
+      );
       await db.updatePost(postId, {
         status: "Postado",
         instagramId: result.mediaId,
@@ -179,12 +240,12 @@ export async function runExecutionForPost(postId: number): Promise<void> {
     );
     const publicImageUrl = `${ENV.publicBaseUrl}${uploaded.url}`;
 
-    const result = await publishImageToInstagram({
-      igUserId: account.igUserId,
-      imageUrl: publicImageUrl,
-      caption: cap.caption,
-      accessToken: metaToken,
-    });
+    const result = await publishForAccount(
+      account,
+      accessToken,
+      publicImageUrl,
+      cap.caption
+    );
 
     await db.updatePost(postId, {
       status: "Postado",
