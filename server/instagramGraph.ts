@@ -1,4 +1,10 @@
-const GRAPH_API_BASE = "https://graph.facebook.com/v21.0";
+// Instagram API with Instagram Login (graph.instagram.com) — NÃO a Graph API via
+// Facebook (graph.facebook.com). O app "Cyberpost Manus" é do tipo Instagram Login
+// (permissões instagram_business_*), sem vínculo com Página do Facebook — então o
+// host antigo dava "Object 17841... does not exist / missing permissions". Os
+// endpoints {ig-id}/media, /media_publish e {media-id}?fields=permalink são os
+// mesmos; só o host e o tipo de token (Instagram User token) mudam.
+const GRAPH_API_BASE = "https://graph.instagram.com/v21.0";
 
 export type PublishResult = {
   mediaId: string;
