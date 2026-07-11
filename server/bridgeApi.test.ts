@@ -180,6 +180,43 @@ describe("POST /api/bridge/post", () => {
     expect(db.createPost).not.toHaveBeenCalled();
   });
 
+  it("creates a text-only post (LinkedIn) with no image when mediaType:'text'", async () => {
+    const res = mockRes();
+    await bridgePostHandler(
+      postReq({
+        mediaType: "text",
+        caption: "Gancho forte na primeira linha.\n\nCorpo com autoridade.\n\nCTA claro.",
+        filename: "cyberseccast-li-1",
+        accountId: 7,
+      }),
+      res
+    );
+    // Texto puro não toca a storage de imagem.
+    expect(r2PutImage).not.toHaveBeenCalled();
+    expect(db.createPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        filename: "cyberseccast-li-1",
+        imageUrl: null,
+        mediaType: "text",
+        captionManual:
+          "Gancho forte na primeira linha.\n\nCorpo com autoridade.\n\nCTA claro.",
+        captionApproved: true,
+        mode: "manual",
+        status: "Pendente",
+        accountId: 7,
+      })
+    );
+    expect(res._status).toBe(200);
+    expect(res._json).toMatchObject({ ok: true, postId: 42, status: "Pendente" });
+  });
+
+  it("still requires a caption for a text-only post", async () => {
+    const res = mockRes();
+    await bridgePostHandler(postReq({ mediaType: "text", caption: "   " }), res);
+    expect(res._status).toBe(400);
+    expect(db.createPost).not.toHaveBeenCalled();
+  });
+
   it("rejects a non-integer accountId", async () => {
     const res = mockRes();
     await bridgePostHandler(

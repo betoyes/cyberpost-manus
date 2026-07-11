@@ -76,8 +76,8 @@ export const posts = mysqlTable("posts", {
     .notNull(),
   /** Scheduled publish time, stored as UTC unix ms. */
   scheduledAt: bigint("scheduledAt", { mode: "number" }),
-  /** Media type to post. */
-  mediaType: mysqlEnum("mediaType", ["image", "reel"])
+  /** Media type to post. 'text' = LinkedIn text-only share (no media). */
+  mediaType: mysqlEnum("mediaType", ["image", "reel", "text"])
     .default("image")
     .notNull(),
 

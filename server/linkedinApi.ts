@@ -63,6 +63,47 @@ export function toOrganizationUrn(orgIdOrUrn: string): string {
     : `urn:li:organization:${value}`;
 }
 
+/**
+ * Cria um post (share) na Company Page via POST /rest/posts e devolve a URN + o
+ * permalink. `extra` carrega o que diverge entre um post de texto puro
+ * (`{ commentary }`) e um com imagem (`{ commentary, content: { media } }`) — o
+ * resto do envelope (author, visibilidade, distribuição, lifecycle) é idêntico,
+ * então mora aqui, num lugar só.
+ */
+async function createLinkedInShare(
+  ownerUrn: string,
+  accessToken: string,
+  extra: Record<string, unknown>
+): Promise<LinkedInPublishResult> {
+  const response = await fetch(`${LINKEDIN_API_BASE}/posts`, {
+    method: "POST",
+    headers: jsonHeaders(accessToken),
+    body: JSON.stringify({
+      author: ownerUrn,
+      visibility: "PUBLIC",
+      distribution: {
+        feedDistribution: "MAIN_FEED",
+        targetEntities: [],
+        thirdPartyDistributionChannels: [],
+      },
+      lifecycleState: "PUBLISHED",
+      isReshareDisabledByAuthor: false,
+      ...extra,
+    }),
+  });
+  if (!response.ok) await throwLinkedInError(response);
+
+  // A URN do post volta no header x-restli-id (não no corpo).
+  const postUrn = response.headers.get("x-restli-id");
+  if (!postUrn) {
+    throw new Error("LinkedIn não retornou o URN do post (header x-restli-id).");
+  }
+  return {
+    postUrn,
+    permalink: `https://www.linkedin.com/feed/update/${postUrn}/`,
+  };
+}
+
 /** Passo 1: registra o upload e devolve a uploadUrl + a URN da imagem. */
 async function initializeImageUpload(
   ownerUrn: string,
@@ -139,34 +180,27 @@ export async function publishImageToLinkedIn(params: {
   );
   await uploadImageBytes(uploadUrl, bytes, params.accessToken);
 
-  const response = await fetch(`${LINKEDIN_API_BASE}/posts`, {
-    method: "POST",
-    headers: jsonHeaders(params.accessToken),
-    body: JSON.stringify({
-      author: ownerUrn,
-      commentary: escapeCommentary(params.caption),
-      visibility: "PUBLIC",
-      distribution: {
-        feedDistribution: "MAIN_FEED",
-        targetEntities: [],
-        thirdPartyDistributionChannels: [],
-      },
-      // Só o id da imagem — altText vazio dispara INVALID_VALUE_BLANK_FIELD, então omite.
-      content: { media: { id: imageUrn } },
-      lifecycleState: "PUBLISHED",
-      isReshareDisabledByAuthor: false,
-    }),
+  return createLinkedInShare(ownerUrn, params.accessToken, {
+    commentary: escapeCommentary(params.caption),
+    // Só o id da imagem — altText vazio dispara INVALID_VALUE_BLANK_FIELD, então omite.
+    content: { media: { id: imageUrn } },
   });
-  if (!response.ok) await throwLinkedInError(response);
+}
 
-  // A URN do post volta no header x-restli-id (não no corpo).
-  const postUrn = response.headers.get("x-restli-id");
-  if (!postUrn) {
-    throw new Error("LinkedIn não retornou o URN do post (header x-restli-id).");
-  }
-
-  return {
-    postUrn,
-    permalink: `https://www.linkedin.com/feed/update/${postUrn}/`,
-  };
+/**
+ * Publica um post de TEXTO PURO numa Company Page do LinkedIn (sem mídia). É o
+ * caminho Fase-1 da ponte JOBS: o LinkedIn é uma plataforma text-first e o post
+ * costuma ser só a copy (gancho + corpo + CTA). Mesmo envelope de
+ * `publishImageToLinkedIn`, mas sem o passo de upload de imagem e sem `content`.
+ */
+export async function publishTextToLinkedIn(params: {
+  /** id numérico da organização OU a URN completa. */
+  orgId: string;
+  caption: string;
+  accessToken: string;
+}): Promise<LinkedInPublishResult> {
+  const ownerUrn = toOrganizationUrn(params.orgId);
+  return createLinkedInShare(ownerUrn, params.accessToken, {
+    commentary: escapeCommentary(params.caption),
+  });
 }

@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import {
   publishImageToLinkedIn,
+  publishTextToLinkedIn,
   escapeCommentary,
   toOrganizationUrn,
 } from "./linkedinApi";
@@ -187,5 +188,76 @@ describe("publishImageToLinkedIn", () => {
         accessToken: TOKEN,
       })
     ).rejects.toThrow(/LinkedIn API error \(403\): ACCESS_DENIED/);
+  });
+});
+
+/** Encena só o POST /rest/posts (texto puro não baixa nem sobe imagem). */
+function stubTextPostFetch(postUrn: string = POST_URN) {
+  const calls: Array<{ url: string; init?: RequestInit }> = [];
+  const fetchMock = vi
+    .fn()
+    .mockImplementation((url: string | URL, init?: RequestInit) => {
+      calls.push({ url: String(url), init });
+      if (String(url).endsWith("/rest/posts")) {
+        return Promise.resolve({
+          ok: true,
+          headers: { get: (h: string) => (h === "x-restli-id" ? postUrn : null) },
+        } as unknown as Response);
+      }
+      throw new Error(`fetch inesperado: ${String(url)}`);
+    });
+  vi.stubGlobal("fetch", fetchMock);
+  return { calls, fetchMock };
+}
+
+describe("publishTextToLinkedIn", () => {
+  afterEach(() => vi.unstubAllGlobals());
+
+  it("cria um post de texto puro num único POST /rest/posts (sem upload)", async () => {
+    const { calls, fetchMock } = stubTextPostFetch();
+    const result = await publishTextToLinkedIn({
+      orgId: ORG_ID,
+      caption: "gancho forte na primeira linha",
+      accessToken: TOKEN,
+    });
+
+    expect(result.postUrn).toBe(POST_URN);
+    expect(result.permalink).toBe(
+      `https://www.linkedin.com/feed/update/${POST_URN}/`
+    );
+    // Um único fetch: nada de baixar/subir imagem.
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(calls[0].url).toMatch(/\/rest\/posts$/);
+  });
+
+  it("manda author, commentary escapada, PUBLIC e SEM content (texto puro)", async () => {
+    const { calls } = stubTextPostFetch();
+    await publishTextToLinkedIn({
+      orgId: ORG_ID,
+      caption: "veja (isso)",
+      accessToken: TOKEN,
+    });
+    const body = JSON.parse(calls[0].init!.body as string);
+    expect(body.author).toBe(ORG_URN);
+    expect(body.commentary).toBe("veja \\(isso\\)");
+    expect(body.visibility).toBe("PUBLIC");
+    expect(body.lifecycleState).toBe("PUBLISHED");
+    // Texto puro NÃO carrega mídia.
+    expect(body.content).toBeUndefined();
+  });
+
+  it("lança erro enxuto quando a criação do post falha", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue({
+        ok: false,
+        status: 422,
+        statusText: "Unprocessable Entity",
+        json: () => Promise.resolve({ message: "INVALID_COMMENTARY" }),
+      } as unknown as Response)
+    );
+    await expect(
+      publishTextToLinkedIn({ orgId: ORG_ID, caption: "x", accessToken: TOKEN })
+    ).rejects.toThrow(/LinkedIn API error \(422\): INVALID_COMMENTARY/);
   });
 });

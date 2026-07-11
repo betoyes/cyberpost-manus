@@ -120,6 +120,7 @@ type BridgePostBody = {
   filename?: unknown;
   accountId?: unknown;
   scheduledAt?: unknown;
+  mediaType?: unknown;
 };
 
 /**
@@ -141,12 +142,19 @@ export async function bridgePostHandler(req: Request, res: Response) {
 
     const body = (req.body ?? {}) as BridgePostBody;
 
-    // Two ways to supply the art: (1) imageBase64 — the raw bytes, which the
-    // Postador HOSTS on its own storage and then publishes from (the Fase-3 path:
-    // use our own arts, no external URL); (2) imageUrl — an already-public URL.
-    // Base64 wins when present.
-    let imageUrl: string;
-    if (typeof body.imageBase64 === "string" && body.imageBase64.length > 0) {
+    // Text-only posts (LinkedIn, text-first): no art at all — just the commentary.
+    // Signalled explicitly by mediaType:"text" so a caller that FORGOT the image
+    // still gets the clear "provide imageBase64/imageUrl" error below.
+    const isTextOnly = body.mediaType === "text";
+
+    // Three ways to supply the art: (0) text-only — no image; (1) imageBase64 —
+    // the raw bytes, which the Postador HOSTS on its own storage and then publishes
+    // from (the Fase-3 path: use our own arts, no external URL); (2) imageUrl — an
+    // already-public URL. Base64 wins when present.
+    let imageUrl: string | null;
+    if (isTextOnly) {
+      imageUrl = null;
+    } else if (typeof body.imageBase64 === "string" && body.imageBase64.length > 0) {
       const filenameHint =
         typeof body.filename === "string" && body.filename.trim().length > 0
           ? body.filename.trim()
@@ -161,7 +169,7 @@ export async function bridgePostHandler(req: Request, res: Response) {
     } else {
       return res.status(400).json({
         error:
-          "provide imageBase64 (art bytes) or imageUrl (a public http(s) URL)",
+          "provide imageBase64 (art bytes), imageUrl (a public http(s) URL), or mediaType:'text'",
       });
     }
 
@@ -211,7 +219,7 @@ export async function bridgePostHandler(req: Request, res: Response) {
       captionApproved: true,
       mode: "manual",
       status: "Pendente",
-      mediaType: "image",
+      mediaType: isTextOnly ? "text" : "image",
       scheduledAt,
       accountId,
     });
@@ -219,7 +227,9 @@ export async function bridgePostHandler(req: Request, res: Response) {
     await db.addLog({
       postId,
       kind: "bridge",
-      message: `Post criado via ponte JOBS para "${filename}" (imagem externa).`,
+      message: `Post criado via ponte JOBS para "${filename}" (${
+        isTextOnly ? "texto puro" : "imagem externa"
+      }).`,
     });
 
     return res.json({ ok: true, postId, status: "Pendente", scheduledAt });

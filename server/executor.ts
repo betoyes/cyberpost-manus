@@ -5,7 +5,7 @@ import { resolveCaption } from "./engine";
 import { triggerAiApprovalFlow } from "./schedulePost";
 import { downloadDriveImage } from "./googleDrive";
 import { publishImageToInstagram } from "./instagramGraph";
-import { publishImageToLinkedIn } from "./linkedinApi";
+import { publishImageToLinkedIn, publishTextToLinkedIn } from "./linkedinApi";
 import { storagePut } from "./storage";
 import type { ResolvedAccount } from "./db";
 
@@ -68,6 +68,32 @@ async function publishForAccount(
     accessToken,
   });
   return { mediaId: result.mediaId, permalink: result.permalink };
+}
+
+/**
+ * Publica um post de TEXTO PURO (sem mídia). Só o LinkedIn suporta — o Instagram
+ * exige uma imagem, então um post de texto roteado pra conta IG é um erro de
+ * configuração, sinalizado aqui com mensagem clara em vez de falhar fundo na API.
+ */
+async function publishTextForAccount(
+  account: ResolvedAccount,
+  accessToken: string,
+  caption: string
+): Promise<{ mediaId: string; permalink: string | null }> {
+  if (account.platform !== "linkedin") {
+    throw new Error(
+      "Post de texto puro só é suportado no LinkedIn (o Instagram exige imagem)."
+    );
+  }
+  if (!account.igUserId) {
+    throw new Error("Conta LinkedIn sem Organization ID configurado.");
+  }
+  const result = await publishTextToLinkedIn({
+    orgId: account.igUserId,
+    caption,
+    accessToken,
+  });
+  return { mediaId: result.postUrn, permalink: result.permalink };
 }
 
 /**
@@ -147,6 +173,47 @@ export async function runExecutionForPost(postId: number): Promise<void> {
       title: `CybersecCAST: token ${label} ausente`,
       content: `"${post.filename}" não pôde ser publicado: token do ${label} não configurado.`,
     });
+    return;
+  }
+
+  // Text-only posts (LinkedIn, via ponte JOBS): no image at all. Publish the
+  // commentary straight to the Company Page and skip the whole image pipeline.
+  if (post.mediaType === "text") {
+    const label = platformLabel(account);
+    try {
+      const result = await publishTextForAccount(account, accessToken, cap.caption);
+      await db.updatePost(postId, {
+        status: "Postado",
+        instagramId: result.mediaId,
+        permalink: result.permalink,
+        note: null,
+      });
+      await db.addLog({
+        postId,
+        kind: "posted",
+        message: `Publicado no ${label}${
+          result.permalink ? `: ${result.permalink}` : ""
+        }`,
+      });
+      await notifyOwner({
+        title: `CybersecCAST: post publicado no ${label}`,
+        content: `"${post.filename}" foi publicado no ${label}.${
+          result.permalink ? ` Link: ${result.permalink}` : ""
+        }`,
+      });
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      await db.updatePost(postId, { status: "Fluxo Parado", note: message });
+      await db.addLog({
+        postId,
+        kind: "error",
+        message: `Erro na execução: ${message}`,
+      });
+      await notifyOwner({
+        title: `CybersecCAST: erro na publicação no ${label}`,
+        content: `Falha ao publicar "${post.filename}" no ${label}. Detalhe: ${message}`,
+      });
+    }
     return;
   }
 
