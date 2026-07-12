@@ -1,7 +1,17 @@
 # HANDOFF — Postador (publisher do ecossistema) + ponte JOBS
 
 > Ponto de partida pra continuar numa janela nova SEM reprocessar a conversa
-> antiga. Leia este arquivo. Escrito 2026-07-09, **atualizado 2026-07-10**.
+> antiga. Leia este arquivo. Escrito 2026-07-09, **atualizado 2026-07-12**.
+
+## 🔵 LinkedIn (Company Page, texto puro) — pronto, não-mergeado (12-jul)
+Além do Instagram, o Postador ganhou um caminho de **texto puro pra LinkedIn Company Page**
+na branch **`feat/linkedin-text-only`** (a partir de `feat/linkedin-publisher`), **NÃO mergeada**:
+`publishTextToLinkedIn` no `linkedinApi.ts` (share sem mídia, `/rest/posts`), roteamento no
+`executor.ts` por `mediaType==='text'`, e o bridge aceitando post sem imagem (`mediaType:'text'`).
+Suíte 136/136 verde. **Aguarda:** a LinkedIn aprovar a Community Management API do app próprio +
+`db:push` + conta platform=linkedin no `/accounts`. **Enquanto isso**, o JOBS publica em Company
+Page por uma **ponte via Make** (fora do Postador) — ver memória `linkedin-company-page-publishing`.
+Quando o app for aprovado, o JOBS troca a ponte Make pelo Postador (auto-aposenta).
 
 ## ✅ ESTADO ATUAL (2026-07-10): PUBLICANDO DE VERDADE
 
