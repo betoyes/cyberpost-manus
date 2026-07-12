@@ -49,39 +49,40 @@
 }
 
 :root {
-  --primary: var(--color-blue-700);
-  --primary-foreground: var(--color-blue-50);
-  --sidebar-primary: var(--color-blue-600);
-  --sidebar-primary-foreground: var(--color-blue-50);
-  --chart-1: var(--color-blue-300);
-  --chart-2: var(--color-blue-500);
-  --chart-3: var(--color-blue-600);
-  --chart-4: var(--color-blue-700);
-  --chart-5: var(--color-blue-800);
-  --radius: 0.65rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.235 0.015 65);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.235 0.015 65);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.235 0.015 65);
-  --secondary: oklch(0.98 0.001 286.375);
-  --secondary-foreground: oklch(0.4 0.015 65);
-  --muted: oklch(0.967 0.001 286.375);
-  --muted-foreground: oklch(0.552 0.016 285.938);
-  --accent: oklch(0.967 0.001 286.375);
-  --accent-foreground: oklch(0.141 0.005 285.823);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.92 0.004 286.32);
-  --input: oklch(0.92 0.004 286.32);
-  --ring: oklch(0.623 0.214 259.815);
-  --sidebar: oklch(0.985 0 0);
-  --sidebar-foreground: oklch(0.235 0.015 65);
-  --sidebar-accent: oklch(0.967 0.001 286.375);
-  --sidebar-accent-foreground: oklch(0.141 0.005 285.823);
-  --sidebar-border: oklch(0.92 0.004 286.32);
-  --sidebar-ring: oklch(0.623 0.214 259.815);
+  /* ── Lavanda — gelo lilás, vidro, violetas (contrato shadcn) ── */
+  --primary: #8B5CF6;                     /* violet-500 — chrome */
+  --primary-foreground: #ffffff;
+  --sidebar-primary: #7C3AED;             /* violet-600 */
+  --sidebar-primary-foreground: #ffffff;
+  --chart-1: #C4B5FD;                     /* violet-300 */
+  --chart-2: #A78BFA;                     /* violet-400 */
+  --chart-3: #8B5CF6;                     /* violet-500 */
+  --chart-4: #7C3AED;                     /* violet-600 */
+  --chart-5: #6D28D9;                     /* violet-700 */
+  --radius: 0.75rem;                      /* rounded-xl (12px) do Lavanda */
+  --background: #F1F1FB;                  /* gelo lilás */
+  --foreground: #332E52;                  /* grafite-lilás — nunca preto */
+  --card: #FFFFFF;
+  --card-foreground: #332E52;
+  --popover: #FFFFFF;
+  --popover-foreground: #332E52;
+  --secondary: #EAE8F6;
+  --secondary-foreground: #4A4570;
+  --muted: #EDEBF7;
+  --muted-foreground: #75719A;            /* texto-2 */
+  --accent: #EDE9FE;                      /* violet-100 */
+  --accent-foreground: #5B21B6;           /* violet-800 */
+  --destructive: #A85342;                 /* Lavanda destructive */
+  --destructive-foreground: #ffffff;
+  --border: #E1DCF0;                       /* linha lilás clara */
+  --input: #E1DCF0;
+  --ring: #8B5CF6;
+  --sidebar: #F6F5FC;
+  --sidebar-foreground: #332E52;
+  --sidebar-accent: #EDE9FE;
+  --sidebar-accent-foreground: #5B21B6;
+  --sidebar-border: #E1DCF0;
+  --sidebar-ring: #8B5CF6;
 }
 
 .dark {
@@ -169,16 +170,16 @@
   /* Subtle command-center grid backdrop for hero/empty panels */
   .cc-grid {
     background-image:
-      linear-gradient(to right, oklch(0.78 0.13 195 / 6%) 1px, transparent 1px),
-      linear-gradient(to bottom, oklch(0.78 0.13 195 / 6%) 1px, transparent 1px);
+      linear-gradient(to right, rgba(139, 92, 246, 0.06) 1px, transparent 1px),
+      linear-gradient(to bottom, rgba(139, 92, 246, 0.06) 1px, transparent 1px);
     background-size: 28px 28px;
   }
 
-  /* Radial signal glow used behind hero content */
+  /* Radial signal glow used behind hero content — névoa pastel Lavanda */
   .cc-signal {
     background:
-      radial-gradient(120% 120% at 0% 0%, oklch(0.78 0.13 195 / 12%) 0%, transparent 45%),
-      radial-gradient(120% 120% at 100% 0%, oklch(0.7 0.12 250 / 10%) 0%, transparent 45%);
+      radial-gradient(120% 120% at 0% 0%, rgba(139, 92, 246, 0.14) 0%, transparent 45%),
+      radial-gradient(120% 120% at 100% 0%, rgba(239, 192, 234, 0.16) 0%, transparent 45%);
   }
 
   /* Operational metadata: monospace, tracked-out, muted */
