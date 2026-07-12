@@ -105,6 +105,35 @@ export default function Home() {
           </div>
         </div>
 
+        {/* Alarme: publicações travadas exigem ação — elevado acima das métricas */}
+        {count("Fluxo Parado") + count("Erro: Imagem Ausente") > 0 && (
+          <div className="flex flex-col gap-3 rounded-xl border border-destructive/30 bg-destructive/8 px-5 py-4 sm:flex-row sm:items-center sm:justify-between">
+            <div className="flex items-center gap-3">
+              <OctagonX className="h-5 w-5 shrink-0 text-destructive" />
+              <div>
+                <p className="text-sm font-medium text-destructive">
+                  {count("Fluxo Parado") + count("Erro: Imagem Ausente")}{" "}
+                  {count("Fluxo Parado") + count("Erro: Imagem Ausente") === 1
+                    ? "publicação travada"
+                    : "publicações travadas"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Fluxo parado ou imagem ausente — precisam da sua revisão pra
+                  voltar a publicar.
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              className="shrink-0 border-destructive/30 bg-card text-destructive hover:bg-destructive/10 hover:text-destructive"
+              onClick={() => navigate("/calendar")}
+            >
+              Revisar
+              <ArrowRight className="h-4 w-4" />
+            </Button>
+          </div>
+        )}
+
         {/* Stats */}
         <div className="grid grid-cols-2 gap-4 lg:grid-cols-4">
           <StatCard

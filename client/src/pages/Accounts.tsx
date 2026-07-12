@@ -288,11 +288,16 @@ export default function Accounts() {
           <CardContent className="space-y-4 p-6">
             <div>
               <h2 className="font-display text-lg font-semibold">
-                Conexão Meta
+                Conexão Meta{" "}
+                <span className="align-middle text-xs font-normal text-muted-foreground">
+                  · fallback global
+                </span>
               </h2>
               <p className="mt-1 text-sm text-muted-foreground">
-                Token de acesso do Instagram Graph API usado para publicar na
-                conta padrão. O token nunca é exibido depois de salvo.
+                Cada conta acima tem <strong>seu próprio token</strong> (botão
+                editar → "Token desta conta") — é o que vale na publicação. Este
+                token global é só o <strong>fallback</strong> pra contas sem token
+                próprio. O token nunca é exibido depois de salvo.
               </p>
             </div>
 
