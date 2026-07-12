@@ -20,12 +20,12 @@ const MAP: Record<
   Postado: {
     label: "Postado",
     icon: CheckCircle2,
-    className: "bg-chart-3/15 text-chart-3 ring-1 ring-inset ring-chart-3/30",
+    className: "bg-success/12 text-success ring-1 ring-inset ring-success/25",
   },
   "Aguardando Aprovação": {
     label: "Aguardando Aprovação",
     icon: MailQuestion,
-    className: "bg-chart-4/15 text-chart-4 ring-1 ring-inset ring-chart-4/30",
+    className: "bg-warning/12 text-warning ring-1 ring-inset ring-warning/25",
   },
   "Erro: Imagem Ausente": {
     label: "Erro: Imagem Ausente",

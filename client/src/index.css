@@ -30,6 +30,10 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
+  --color-success: var(--success);
+  --color-success-foreground: var(--success-foreground);
+  --color-warning: var(--warning);
+  --color-warning-foreground: var(--warning-foreground);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -72,8 +76,12 @@
   --muted-foreground: #75719A;            /* texto-2 */
   --accent: #EDE9FE;                      /* violet-100 */
   --accent-foreground: #5B21B6;           /* violet-800 */
-  --destructive: #A85342;                 /* Lavanda destructive */
+  --destructive: #A85342;                 /* Lavanda destructive (atrasado) */
   --destructive-foreground: #ffffff;
+  --success: #357F63;                      /* Lavanda em dia/sucesso — verde */
+  --success-foreground: #ffffff;
+  --warning: #96732F;                      /* Lavanda hoje/atenção — âmbar */
+  --warning-foreground: #ffffff;
   --border: #E1DCF0;                       /* linha lilás clara */
   --input: #E1DCF0;
   --ring: #8B5CF6;

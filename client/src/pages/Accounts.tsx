@@ -232,7 +232,7 @@ export default function Accounts() {
                         {a.active ? (
                           <Badge
                             variant="outline"
-                            className="text-green-600 border-green-600/30"
+                            className="text-success border-success/30"
                           >
                             Ativa
                           </Badge>

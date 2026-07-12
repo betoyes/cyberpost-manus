@@ -11,7 +11,7 @@ import { Plug, ShieldCheck, Instagram, CheckCircle2, AlertCircle, ExternalLink, 
 
 function ConnectionPill({ ok }: { ok?: boolean }) {
   return ok ? (
-    <Badge className="gap-1 bg-chart-3/15 text-chart-3 ring-1 ring-inset ring-chart-3/30 hover:bg-chart-3/15">
+    <Badge className="gap-1 bg-success/12 text-success ring-1 ring-inset ring-success/25 hover:bg-success/12">
       <CheckCircle2 className="h-3.5 w-3.5" /> Conectado
     </Badge>
   ) : (

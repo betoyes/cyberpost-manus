@@ -12,6 +12,7 @@ import {
   ArrowRight,
   ShieldCheck,
   Plug,
+  Image as ImageIcon,
 } from "lucide-react";
 import { formatSaoPaulo } from "@shared/timezone";
 import { PipelineEmptyState } from "@/components/PipelineEmptyState";
@@ -116,13 +117,13 @@ export default function Home() {
             label="Postados"
             value={count("Postado")}
             icon={CheckCircle2}
-            tone="bg-chart-3"
+            tone="bg-success"
           />
           <StatCard
             label="Aguardando Aprovação"
             value={count("Aguardando Aprovação")}
             icon={MailQuestion}
-            tone="bg-chart-4"
+            tone="bg-warning"
           />
           <StatCard
             label="Fluxos Parados"
@@ -171,16 +172,30 @@ export default function Home() {
                       key={p.id}
                       className="flex items-center justify-between gap-4 py-3"
                     >
-                      <div className="min-w-0">
-                        <p className="truncate font-medium">{p.filename}</p>
-                        <p className="truncate text-xs text-muted-foreground">
-                          {p.theme || "Sem tema"} ·{" "}
-                          <span className="cc-meta">
-                            {p.scheduledAt
-                              ? formatSaoPaulo(p.scheduledAt)
-                              : "Sem data"}
-                          </span>
-                        </p>
+                      <div className="flex min-w-0 items-center gap-3">
+                        {/^https?:\/\//i.test(p.imageUrl ?? "") ? (
+                          <img
+                            src={p.imageUrl ?? ""}
+                            alt=""
+                            loading="lazy"
+                            className="h-10 w-10 shrink-0 rounded-md object-cover ring-1 ring-border"
+                          />
+                        ) : (
+                          <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-border">
+                            <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate font-medium">{p.filename}</p>
+                          <p className="truncate text-xs text-muted-foreground">
+                            {p.theme || "Sem tema"} ·{" "}
+                            <span className="cc-meta">
+                              {p.scheduledAt
+                                ? formatSaoPaulo(p.scheduledAt)
+                                : "Sem data"}
+                            </span>
+                          </p>
+                        </div>
                       </div>
                       <StatusBadge status={p.status as PostStatus} />
                     </li>
@@ -236,11 +251,11 @@ function HealthRow({ label, ok }: { label: string; ok?: boolean }) {
       <span className="text-sm">{label}</span>
       <span
         className={`inline-flex items-center gap-1.5 text-xs font-medium ${
-          ok ? "text-chart-3" : "text-muted-foreground"
+          ok ? "text-success" : "text-muted-foreground"
         }`}
       >
         <span
-          className={`h-2 w-2 rounded-full ${ok ? "bg-chart-3 shadow-[0_0_8px] shadow-chart-3/60" : "bg-muted-foreground/40"}`}
+          className={`h-2 w-2 rounded-full ${ok ? "bg-success shadow-[0_0_8px] shadow-success/60" : "bg-muted-foreground/40"}`}
         />
         {ok ? "Conectado" : "Pendente"}
       </span>

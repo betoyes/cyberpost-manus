@@ -265,11 +265,22 @@ export default function Calendar() {
                   {filtered.map(p => (
                     <TableRow key={p.id}>
                       <TableCell className="font-medium">
-                        <div className="flex items-center gap-2">
-                          {p.mediaType === "reel" ? (
-                            <Film className="h-4 w-4 text-muted-foreground" />
+                        <div className="flex items-center gap-2.5">
+                          {/^https?:\/\//i.test(p.imageUrl ?? "") ? (
+                            <img
+                              src={p.imageUrl ?? ""}
+                              alt=""
+                              loading="lazy"
+                              className="h-9 w-9 shrink-0 rounded-md object-cover ring-1 ring-border"
+                            />
                           ) : (
-                            <Image className="h-4 w-4 text-muted-foreground" />
+                            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md bg-muted ring-1 ring-border">
+                              {p.mediaType === "reel" ? (
+                                <Film className="h-4 w-4 text-muted-foreground" />
+                              ) : (
+                                <Image className="h-4 w-4 text-muted-foreground" />
+                              )}
+                            </div>
                           )}
                           <span className="font-mono text-xs">
                             {p.filename}
