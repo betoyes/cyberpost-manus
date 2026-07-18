@@ -4,7 +4,7 @@ import * as db from "./db";
 import { resolveCaption } from "./engine";
 import { triggerAiApprovalFlow } from "./schedulePost";
 import { downloadDriveImage } from "./googleDrive";
-import { publishImageToInstagram } from "./instagramGraph";
+import { publishImageToInstagram, publishReelToInstagram } from "./instagramGraph";
 import { storagePut } from "./storage";
 
 /**
@@ -93,12 +93,21 @@ export async function runExecutionForPost(postId: number): Promise<void> {
   // it straight from there and skip Google Drive entirely.
   if (isExternalSourceUrl(post.imageUrl)) {
     try {
-      const result = await publishImageToInstagram({
-        igUserId: account.igUserId,
-        imageUrl: post.imageUrl,
-        caption: cap.caption,
-        accessToken: metaToken,
-      });
+      // Reel (vídeo) vs imagem: mesma URL pública em imageUrl, publisher por mediaType.
+      const result =
+        post.mediaType === "reel"
+          ? await publishReelToInstagram({
+              igUserId: account.igUserId,
+              videoUrl: post.imageUrl,
+              caption: cap.caption,
+              accessToken: metaToken,
+            })
+          : await publishImageToInstagram({
+              igUserId: account.igUserId,
+              imageUrl: post.imageUrl,
+              caption: cap.caption,
+              accessToken: metaToken,
+            });
       await db.updatePost(postId, {
         status: "Postado",
         instagramId: result.mediaId,

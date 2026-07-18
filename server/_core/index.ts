@@ -15,7 +15,7 @@ import {
   queueApprovalHandler,
   queueGenerateCaptionHandler,
 } from "../queueApi";
-import { bridgePostHandler, bridgeStatusHandler } from "../bridgeApi";
+import { bridgePostHandler, bridgeStatusHandler, bridgeAccountsHandler } from "../bridgeApi";
 import { runPostHandler } from "../schedulePost";
 import { approvalGetHandler } from "../approvalHandler";
 import { startExecutorWorker } from "../executorWorker";
@@ -64,6 +64,7 @@ async function startServer() {
   // public image URL (Artista) and read its publish status.
   app.post("/api/bridge/post", bridgePostHandler);
   app.get("/api/bridge/status/:id", bridgeStatusHandler);
+  app.get("/api/bridge/accounts", bridgeAccountsHandler);
   // tRPC API
   app.use(
     "/api/trpc",
