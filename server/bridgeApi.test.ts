@@ -180,6 +180,66 @@ describe("POST /api/bridge/post", () => {
     expect(db.createPost).not.toHaveBeenCalled();
   });
 
+  it("publishes a reel from a public videoUrl (mediaType reel, no hosting)", async () => {
+    const res = mockRes();
+    await bridgePostHandler(
+      postReq({
+        media: "reel",
+        videoUrl: "https://pub-test.r2.dev/reels/x.mp4",
+        caption: "Reel do Avatar Studio",
+        filename: "luiz-reel",
+      }),
+      res
+    );
+    // URL pública → não hospeda de novo
+    expect(r2PutImage).not.toHaveBeenCalled();
+    expect(db.createPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageUrl: "https://pub-test.r2.dev/reels/x.mp4",
+        mediaType: "reel",
+        captionManual: "Reel do Avatar Studio",
+        status: "Pendente",
+      })
+    );
+    expect(res._status).toBe(200);
+  });
+
+  it("hosts videoBase64 (MP4) on R2 and creates a reel post", async () => {
+    // HEAD-check de propagação do R2 (waitUrlServable) → stub pra não bater na rede.
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true }) as unknown as Response));
+    vi.mocked(r2PutImage).mockResolvedValue("https://pub-test.r2.dev/bridge/reel-abc.mp4");
+    // MP4 mínimo válido: "ftyp" no offset 4.
+    const mp4 = Buffer.concat([
+      Buffer.from([0x00, 0x00, 0x00, 0x18]),
+      Buffer.from("ftypmp42"),
+      Buffer.alloc(16),
+    ]);
+    const res = mockRes();
+    await bridgePostHandler(
+      postReq({ videoBase64: mp4.toString("base64"), caption: "Reel", filename: "luiz-reel" }),
+      res
+    );
+    expect(r2PutImage).toHaveBeenCalled();
+    expect(db.createPost).toHaveBeenCalledWith(
+      expect.objectContaining({
+        imageUrl: "https://pub-test.r2.dev/bridge/reel-abc.mp4",
+        mediaType: "reel",
+      })
+    );
+    expect(res._status).toBe(200);
+    vi.unstubAllGlobals();
+  });
+
+  it("rejects videoBase64 that is not a real MP4/MOV", async () => {
+    const res = mockRes();
+    await bridgePostHandler(
+      postReq({ videoBase64: Buffer.from("not a video at all").toString("base64"), caption: "x" }),
+      res
+    );
+    expect(res._status).toBe(400);
+    expect(db.createPost).not.toHaveBeenCalled();
+  });
+
   it("rejects a non-integer accountId", async () => {
     const res = mockRes();
     await bridgePostHandler(

@@ -51,18 +51,25 @@ async function graphGet(
 
 const CONTAINER_POLL_ATTEMPTS = 20;
 const CONTAINER_POLL_INTERVAL_MS = 3000;
+// Reels processam bem mais devagar que imagem (o IG transcodifica o vídeo), então
+// o teto de espera é maior: 60 × 5s = ~5 min.
+const REEL_POLL_ATTEMPTS = 60;
+const REEL_POLL_INTERVAL_MS = 5000;
 
 /**
- * O Instagram baixa e processa a imagem de forma ASSÍNCRONA depois que o container
+ * O Instagram baixa e processa a mídia de forma ASSÍNCRONA depois que o container
  * é criado (`{ig}/media`). Chamar `media_publish` antes de o container estar
  * FINISHED dá "Media ID is not available". Aqui a gente espera o `status_code`
- * virar FINISHED (ou aborta em ERROR / timeout com mensagem clara).
+ * virar FINISHED (ou aborta em ERROR / timeout com mensagem clara). Os limites de
+ * poll são parametrizados porque vídeo (Reel) demora mais que imagem.
  */
 async function waitForContainerReady(
   creationId: string,
-  accessToken: string
+  accessToken: string,
+  attempts: number = CONTAINER_POLL_ATTEMPTS,
+  intervalMs: number = CONTAINER_POLL_INTERVAL_MS
 ): Promise<void> {
-  for (let attempt = 0; attempt < CONTAINER_POLL_ATTEMPTS; attempt++) {
+  for (let attempt = 0; attempt < attempts; attempt++) {
     const status = await graphGet(creationId, {
       fields: "status_code",
       access_token: accessToken,
@@ -71,17 +78,35 @@ async function waitForContainerReady(
     if (code === "FINISHED") return;
     if (code === "ERROR") {
       throw new Error(
-        "Instagram não conseguiu processar a imagem (container ERROR) — " +
-          "confira se a URL da imagem é http(s) pública e acessível."
+        "Instagram não conseguiu processar a mídia (container ERROR) — " +
+          "confira se a URL da mídia é http(s) pública e acessível."
       );
     }
     await new Promise((resolve) =>
-      setTimeout(resolve, CONTAINER_POLL_INTERVAL_MS)
+      setTimeout(resolve, intervalMs)
     );
   }
   throw new Error(
     "O container do Instagram não ficou pronto a tempo (status_code != FINISHED)."
   );
+}
+
+/** Busca o permalink de uma mídia já publicada (nice-to-have, nunca derruba o post). */
+async function fetchPermalink(
+  mediaId: string,
+  accessToken: string
+): Promise<string | null> {
+  try {
+    const permalinkUrl = new URL(`${GRAPH_API_BASE}/${mediaId}`);
+    permalinkUrl.searchParams.set("fields", "permalink");
+    permalinkUrl.searchParams.set("access_token", accessToken);
+    const response = await fetch(permalinkUrl);
+    if (!response.ok) return null;
+    const data = (await response.json()) as { permalink?: string };
+    return data.permalink ?? null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -116,22 +141,52 @@ export async function publishImageToInstagram(params: {
   const mediaId = published.id as string | undefined;
   if (!mediaId) throw new Error("Instagram media_publish did not return an id");
 
-  let permalink: string | null = null;
-  try {
-    const permalinkUrl = new URL(`${GRAPH_API_BASE}/${mediaId}`);
-    permalinkUrl.searchParams.set("fields", "permalink");
-    permalinkUrl.searchParams.set("access_token", accessToken);
-    const permalinkResponse = await fetch(permalinkUrl);
-    if (permalinkResponse.ok) {
-      const permalinkData = (await permalinkResponse.json()) as {
-        permalink?: string;
-      };
-      permalink = permalinkData.permalink ?? null;
-    }
-  } catch {
-    // Permalink is a nice-to-have; the post is already published either way.
-  }
+  const permalink = await fetchPermalink(mediaId, accessToken);
+  return { mediaId, permalink };
+}
 
+/**
+ * Publica um REEL (vídeo vertical) — mesmo fluxo container→publish da imagem, mas o
+ * container é criado com `media_type=REELS` + `video_url` (URL http(s) pública que o
+ * Instagram baixa) e a espera é mais longa (o IG transcodifica o vídeo). Usa a MESMA
+ * permissão de content-publishing das imagens; nada novo no app Meta.
+ * `share_to_feed=true` faz o reel também aparecer no feed do perfil.
+ */
+export async function publishReelToInstagram(params: {
+  igUserId: string;
+  videoUrl: string;
+  caption: string;
+  accessToken: string;
+}): Promise<PublishResult> {
+  const { igUserId, videoUrl, caption, accessToken } = params;
+
+  const creation = await graphPost(`${igUserId}/media`, {
+    media_type: "REELS",
+    video_url: videoUrl,
+    caption,
+    share_to_feed: "true",
+    access_token: accessToken,
+  });
+  const creationId = creation.id as string | undefined;
+  if (!creationId)
+    throw new Error("Instagram media creation did not return an id");
+
+  // Vídeo demora mais pra processar que imagem — teto de espera maior.
+  await waitForContainerReady(
+    creationId,
+    accessToken,
+    REEL_POLL_ATTEMPTS,
+    REEL_POLL_INTERVAL_MS
+  );
+
+  const published = await graphPost(`${igUserId}/media_publish`, {
+    creation_id: creationId,
+    access_token: accessToken,
+  });
+  const mediaId = published.id as string | undefined;
+  if (!mediaId) throw new Error("Instagram media_publish did not return an id");
+
+  const permalink = await fetchPermalink(mediaId, accessToken);
   return { mediaId, permalink };
 }
 

@@ -113,9 +113,71 @@ async function hostBase64Image(imageBase64: string, filename: string): Promise<s
   return r2PutImage(`bridge/${safeName}-${hash}.${type.ext}`, buf, type.mime);
 }
 
+/**
+ * Max decoded size accepted via videoBase64. Cap fica < que o body-limit do express
+ * (50mb, e base64 infla ~33%): 30MB decodificado ≈ 40MB de payload, com folga. Um
+ * reel vertical curto do Avatar Studio cabe de sobra.
+ */
+const MAX_VIDEO_BYTES = 30 * 1024 * 1024;
+
+/** Sniff MP4/MOV (Reels do IG exigem MP4/MOV); null se não reconhecer. */
+function sniffVideoType(buf: Buffer): { ext: string; mime: string } | null {
+  // ISO base media (MP4/MOV/M4V): "ftyp" no offset 4.
+  if (buf.length >= 12 && buf.toString("ascii", 4, 8) === "ftyp") {
+    return { ext: "mp4", mime: "video/mp4" };
+  }
+  return null;
+}
+
+/**
+ * r2.dev pode levar segundos pra servir um objeto INÉDITO (propagação). Como o
+ * Instagram baixa a mídia logo depois, um HEAD-check best-effort reduz o container
+ * ERROR de "URL não acessível" — mais crítico no vídeo (arquivo maior). Nunca falha:
+ * se não servir a tempo, segue (o IG tem retry próprio no processamento do container).
+ */
+async function waitUrlServable(url: string, attempts = 6, intervalMs = 1000): Promise<void> {
+  for (let i = 0; i < attempts; i++) {
+    try {
+      const r = await fetch(url, { method: "HEAD" });
+      if (r.ok) return;
+    } catch {
+      /* rede — tenta de novo */
+    }
+    await new Promise((resolve) => setTimeout(resolve, intervalMs));
+  }
+}
+
+/** Decodifica os bytes do vídeo, valida (MP4, tamanho) e hospeda no R2 → URL pública. */
+async function hostBase64Video(videoBase64: string, filename: string): Promise<string> {
+  const b64 = videoBase64.replace(/^data:[^;]+;base64,/, "");
+  let buf: Buffer;
+  try {
+    buf = Buffer.from(b64, "base64");
+  } catch {
+    throw new Error("videoBase64 is not valid base64");
+  }
+  if (buf.length === 0) throw new Error("videoBase64 decoded to empty bytes");
+  if (buf.length > MAX_VIDEO_BYTES) {
+    throw new Error(`video exceeds ${Math.round(MAX_VIDEO_BYTES / (1024 * 1024))}MB`);
+  }
+  const type = sniffVideoType(buf);
+  if (!type) throw new Error("video must be MP4/MOV");
+  const safeName = (filename.replace(/[^\w.-]/g, "_").slice(0, 80) || "reel").replace(
+    /\.(mp4|mov|m4v)$/i,
+    "",
+  );
+  const hash = createHash("sha256").update(buf).digest("hex").slice(0, 16);
+  const url = await r2PutImage(`bridge/${safeName}-${hash}.${type.ext}`, buf, type.mime);
+  await waitUrlServable(url);
+  return url;
+}
+
 type BridgePostBody = {
   imageUrl?: unknown;
   imageBase64?: unknown;
+  videoUrl?: unknown; // reel: URL http(s) pública do vídeo
+  videoBase64?: unknown; // reel: bytes do vídeo (hospedados no R2, como a imagem)
+  media?: unknown; // "image" | "reel" (default: inferido pelo que veio)
   caption?: unknown;
   filename?: unknown;
   accountId?: unknown;
@@ -124,15 +186,14 @@ type BridgePostBody = {
 
 /**
  * POST /api/bridge/post
- * Body: {
- *   imageBase64: string (one of) — the art's raw bytes; hosted on the Postador's
- *                                  own storage and published from there (Fase 3)
- *   imageUrl:   string  (one of) — an already-public http(s) URL of the art
+ * Body (imagem OU reel — a mídia vem por bytes base64, hospedada no R2, ou por URL pública):
+ *   imageBase64 | imageUrl   — imagem (PNG/JPEG/WebP)
+ *   videoBase64 | videoUrl   — reel (MP4/MOV); ativa mediaType="reel"
+ *   media?:     "image"|"reel" — força o tipo (default: inferido pelo que veio)
  *   caption:    string  (required) — the approved caption (<= 2200 chars)
  *   filename?:  string            — human label for logs/emails (default derived)
  *   accountId?: number            — target Instagram account (default = default account)
  *   scheduledAt?: number          — unix ms; default now (publish on next worker tick)
- * }
  */
 export async function bridgePostHandler(req: Request, res: Response) {
   try {
@@ -141,16 +202,38 @@ export async function bridgePostHandler(req: Request, res: Response) {
 
     const body = (req.body ?? {}) as BridgePostBody;
 
-    // Two ways to supply the art: (1) imageBase64 — the raw bytes, which the
-    // Postador HOSTS on its own storage and then publishes from (the Fase-3 path:
-    // use our own arts, no external URL); (2) imageUrl — an already-public URL.
-    // Base64 wins when present.
+    const filenameHint =
+      typeof body.filename === "string" && body.filename.trim().length > 0
+        ? body.filename.trim()
+        : "art";
+
+    // Reel (vídeo) ou imagem? Inferido pelo que veio (ou forçado por `media`). Em
+    // ambos os casos há duas formas de entregar a mídia: base64 (o Postador hospeda
+    // no R2 e publica de lá — o caminho Fase 3) ou uma URL http(s) já pública.
+    const wantsReel =
+      body.media === "reel" ||
+      (typeof body.videoBase64 === "string" && body.videoBase64.length > 0) ||
+      isPublicHttpUrl(body.videoUrl);
+
+    // A URL pública da mídia (imagem OU vídeo) vai em `imageUrl` — a coluna já
+    // existe e o executor escolhe o publisher por `mediaType`. Sem migração.
     let imageUrl: string;
-    if (typeof body.imageBase64 === "string" && body.imageBase64.length > 0) {
-      const filenameHint =
-        typeof body.filename === "string" && body.filename.trim().length > 0
-          ? body.filename.trim()
-          : "art";
+    const mediaType: "image" | "reel" = wantsReel ? "reel" : "image";
+    if (wantsReel) {
+      if (typeof body.videoBase64 === "string" && body.videoBase64.length > 0) {
+        try {
+          imageUrl = await hostBase64Video(body.videoBase64, filenameHint);
+        } catch (e) {
+          return res.status(400).json({ error: (e as Error).message });
+        }
+      } else if (isPublicHttpUrl(body.videoUrl)) {
+        imageUrl = body.videoUrl;
+      } else {
+        return res.status(400).json({
+          error: "provide videoBase64 (reel bytes) or videoUrl (a public http(s) URL)",
+        });
+      }
+    } else if (typeof body.imageBase64 === "string" && body.imageBase64.length > 0) {
       try {
         imageUrl = await hostBase64Image(body.imageBase64, filenameHint);
       } catch (e) {
@@ -161,7 +244,7 @@ export async function bridgePostHandler(req: Request, res: Response) {
     } else {
       return res.status(400).json({
         error:
-          "provide imageBase64 (art bytes) or imageUrl (a public http(s) URL)",
+          "provide imageBase64/imageUrl (imagem) ou videoBase64/videoUrl (reel)",
       });
     }
 
@@ -211,7 +294,7 @@ export async function bridgePostHandler(req: Request, res: Response) {
       captionApproved: true,
       mode: "manual",
       status: "Pendente",
-      mediaType: "image",
+      mediaType,
       scheduledAt,
       accountId,
     });
@@ -219,13 +302,39 @@ export async function bridgePostHandler(req: Request, res: Response) {
     await db.addLog({
       postId,
       kind: "bridge",
-      message: `Post criado via ponte JOBS para "${filename}" (imagem externa).`,
+      message: `Post criado via ponte JOBS para "${filename}" (${mediaType === "reel" ? "reel/vídeo" : "imagem"} externo).`,
     });
 
     return res.json({ ok: true, postId, status: "Pendente", scheduledAt });
   } catch (error) {
     const err = error as Error;
     return res.status(500).json({ error: err.message });
+  }
+}
+
+/**
+ * GET /api/bridge/accounts
+ * Lista as contas Instagram ativas (id + nome + handle + qual é a padrão) para o
+ * originador (Avatar Studio) deixar o operador escolher em qual publicar. NÃO
+ * devolve token nenhum — os tokens vivem em settings (`meta_token:*`), não aqui.
+ */
+export async function bridgeAccountsHandler(req: Request, res: Response) {
+  try {
+    if (!authorized(req)) return res.status(401).json({ error: "unauthorized" });
+    const accounts = await db.listAccounts();
+    return res.json({
+      ok: true,
+      accounts: accounts
+        .filter((a) => a.active)
+        .map((a) => ({
+          id: a.id,
+          name: a.name,
+          handle: a.handle ?? null,
+          isDefault: a.isDefault,
+        })),
+    });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
   }
 }
 
