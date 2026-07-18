@@ -312,6 +312,51 @@ export async function bridgePostHandler(req: Request, res: Response) {
   }
 }
 
+type BridgeHostVideoBody = {
+  videoBase64?: unknown; // bytes do vídeo (MP4/MOV) — hospedados no R2
+  videoUrl?: unknown; // ou uma URL http(s) já pública (passthrough)
+  filename?: unknown;
+};
+
+/**
+ * POST /api/bridge/host-video
+ * Hospeda um vídeo no R2 e devolve só a URL pública — SEM criar post. Serve o
+ * caminho "vídeo no LinkedIn via Make": o Avatar precisa de uma URL pública do reel
+ * pra mandar no webhook do Make (que baixa o vídeo e publica na Company Page). Reusa
+ * exatamente o hosting do fluxo de Reel (hostBase64Video). Token-authenticated.
+ *
+ * Body: { videoBase64 (MP4/MOV) }  — ou  { videoUrl } já pública (passthrough)
+ * Resposta: { ok: true, url }
+ */
+export async function bridgeHostVideoHandler(req: Request, res: Response) {
+  try {
+    if (!authorized(req)) return res.status(401).json({ error: "unauthorized" });
+
+    const body = (req.body ?? {}) as BridgeHostVideoBody;
+    const filenameHint =
+      typeof body.filename === "string" && body.filename.trim().length > 0
+        ? body.filename.trim()
+        : "reel";
+
+    if (typeof body.videoBase64 === "string" && body.videoBase64.length > 0) {
+      try {
+        const url = await hostBase64Video(body.videoBase64, filenameHint);
+        return res.json({ ok: true, url });
+      } catch (e) {
+        return res.status(400).json({ error: (e as Error).message });
+      }
+    }
+    if (isPublicHttpUrl(body.videoUrl)) {
+      return res.json({ ok: true, url: body.videoUrl });
+    }
+    return res.status(400).json({
+      error: "provide videoBase64 (reel bytes) or videoUrl (a public http(s) URL)",
+    });
+  } catch (error) {
+    return res.status(500).json({ error: (error as Error).message });
+  }
+}
+
 /**
  * GET /api/bridge/accounts
  * Lista as contas Instagram ativas (id + nome + handle + qual é a padrão) para o

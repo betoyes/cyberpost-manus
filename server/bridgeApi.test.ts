@@ -14,7 +14,7 @@ vi.mock("./r2", () => ({
 
 import * as db from "./db";
 import { r2PutImage } from "./r2";
-import { bridgePostHandler, bridgeStatusHandler } from "./bridgeApi";
+import { bridgePostHandler, bridgeStatusHandler, bridgeHostVideoHandler } from "./bridgeApi";
 
 const TOKEN = "brg_7Kx2mPv7nR4tZ9wLbY3eHfA6dG1sJ5q";
 const AUTH = { authorization: `Bearer ${TOKEN}` };
@@ -269,6 +269,67 @@ describe("POST /api/bridge/post", () => {
     );
     expect(res._status).toBe(200);
     expect(db.createPost).toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/bridge/host-video", () => {
+  beforeEach(() => {
+    process.env.BRIDGE_API_TOKEN = TOKEN;
+    delete process.env.ALLOWED_IMAGE_HOSTS;
+    vi.mocked(r2PutImage)
+      .mockReset()
+      .mockResolvedValue("https://pub-test.r2.dev/bridge/reel-abc.mp4");
+    vi.mocked(db.createPost).mockReset().mockResolvedValue(42 as any);
+  });
+
+  it("rejects requests without a token", async () => {
+    const res = mockRes();
+    await bridgeHostVideoHandler(postReq({ videoUrl: "https://x/a.mp4" }, {}), res);
+    expect(res._status).toBe(401);
+    expect(r2PutImage).not.toHaveBeenCalled();
+  });
+
+  it("hosts videoBase64 (MP4) on R2 and returns the public URL — without creating a post", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: true }) as unknown as Response));
+    const mp4 = Buffer.concat([
+      Buffer.from([0x00, 0x00, 0x00, 0x18]),
+      Buffer.from("ftypmp42"),
+      Buffer.alloc(16),
+    ]);
+    const res = mockRes();
+    await bridgeHostVideoHandler(
+      postReq({ videoBase64: mp4.toString("base64"), filename: "luiz-reel" }),
+      res
+    );
+    expect(r2PutImage).toHaveBeenCalled();
+    expect(db.createPost).not.toHaveBeenCalled();
+    expect(res._status).toBe(200);
+    expect(res._json).toEqual({ ok: true, url: "https://pub-test.r2.dev/bridge/reel-abc.mp4" });
+    vi.unstubAllGlobals();
+  });
+
+  it("passes through an already-public videoUrl", async () => {
+    const res = mockRes();
+    await bridgeHostVideoHandler(postReq({ videoUrl: "https://pub-test.r2.dev/reels/x.mp4" }), res);
+    expect(r2PutImage).not.toHaveBeenCalled();
+    expect(res._status).toBe(200);
+    expect(res._json).toEqual({ ok: true, url: "https://pub-test.r2.dev/reels/x.mp4" });
+  });
+
+  it("rejects videoBase64 that is not a real MP4/MOV", async () => {
+    const res = mockRes();
+    await bridgeHostVideoHandler(
+      postReq({ videoBase64: Buffer.from("not a video").toString("base64") }),
+      res
+    );
+    expect(res._status).toBe(400);
+  });
+
+  it("rejects a request with neither videoBase64 nor a public videoUrl", async () => {
+    const res = mockRes();
+    await bridgeHostVideoHandler(postReq({ videoUrl: "not-a-url" }), res);
+    expect(res._status).toBe(400);
+    expect(r2PutImage).not.toHaveBeenCalled();
   });
 });
 
